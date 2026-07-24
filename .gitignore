@@ -1,0 +1,22 @@
+# Configuracao local com senhas
+config/settings.psd1
+
+# Downloads temporarios dos instaladores
+downloads/
+*.exe
+*.msi
+
+# Logs dos scripts
+logs/
+*.log
+
+# Nada de dados de client / binarios compilados neste repo
+Data/
+dbc/
+maps/
+vmaps/
+mmaps/
+Buildings/
+Cameras/
+*.conf
+!*.conf.dist
