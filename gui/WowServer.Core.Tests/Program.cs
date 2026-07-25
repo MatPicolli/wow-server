@@ -228,5 +228,56 @@ finally
     try { File.Delete(tmp); } catch { }
 }
 
+// --------------------------------------------------------------- uistate ---
+Console.WriteLine("\n=== UiState: persistencia entre execucoes ===");
+
+var estadoPath = Path.Combine(Path.GetTempPath(), $"ui-{Guid.NewGuid():N}.json");
+try
+{
+    var salvo = new UiState
+    {
+        WindowWidth = 1600, WindowHeight = 900,
+        WindowLeft = 100, WindowTop = 50,
+        SelectedTab = 3, ConsoleWrap = false, ServerSideBySide = false,
+        Mining = 3, Herbalism = 2.5, QuestItems = 4,
+    };
+    salvo.Save(estadoPath);
+    Check("grava o arquivo", File.Exists(estadoPath));
+
+    var lido = UiState.Load(estadoPath);
+    Check("restaura tamanho da janela", lido.WindowWidth == 1600 && lido.WindowHeight == 900);
+    Check("restaura aba selecionada", lido.SelectedTab == 3);
+    Check("restaura quebra de linha", !lido.ConsoleWrap);
+    Check("restaura layout dos paineis", !lido.ServerSideBySide);
+    Check("restaura multiplicadores com decimal",
+          lido.Mining == 3 && lido.Herbalism == 2.5 && lido.QuestItems == 4,
+          $"{lido.Mining}/{lido.Herbalism}/{lido.QuestItems}");
+
+    var restaurado = lido.ToGathering().ToArguments(apply: false);
+    Check("converte de volta para os argumentos do script",
+          restaurado.Contains("-Mining") && restaurado.Contains("2.5"),
+          string.Join(' ', restaurado));
+
+    File.WriteAllText(estadoPath, "{ isso nao e json valido");
+    var corrompido = UiState.Load(estadoPath);
+    Check("arquivo corrompido nao impede abrir", corrompido.WindowWidth == 1440);
+
+    Check("arquivo inexistente devolve padrao",
+          UiState.Load(Path.Combine(Path.GetTempPath(), "nao-existe-ui.json")).ConsoleWrap);
+
+    // posicao vinda de um monitor que nao existe mais
+    var fora = new UiState { WindowLeft = 9000, WindowTop = 9000 };
+    Check("rejeita posicao fora da area visivel",
+          !fora.HasUsablePosition(0, 0, 1920, 1080));
+    var dentro = new UiState { WindowLeft = 200, WindowTop = 100 };
+    Check("aceita posicao valida", dentro.HasUsablePosition(0, 0, 1920, 1080));
+    Check("sem posicao gravada usa o padrao",
+          !new UiState().HasUsablePosition(0, 0, 1920, 1080));
+}
+finally
+{
+    try { File.Delete(estadoPath); } catch { }
+}
+
 Console.WriteLine($"\n{total - falhas}/{total} testes passaram (final)");
 return falhas == 0 ? 0 : 1;

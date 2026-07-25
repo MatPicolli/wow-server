@@ -36,7 +36,7 @@
         </Style>
     </Window.Resources>
 
-    <TabControl x:Name="Abas" TabStripPlacement="Left" Background="{StaticResource Bg}"
+    <TabControl x:Name="Abas" SelectionChanged="Abas_SelectionChanged" TabStripPlacement="Left" Background="{StaticResource Bg}"
                 BorderThickness="0" Padding="0">
         <TabControl.Resources>
             <Style TargetType="TabPanel">
@@ -71,7 +71,7 @@
                     <TextBlock Text="ligar e comandar" FontSize="10" Foreground="{StaticResource TextDim}" />
                 </StackPanel>
             </TabItem.Header>
-            <v:ServerView />
+            <v:ServerView x:Name="TelaServidor" />
         </TabItem>
 
         <TabItem Style="{StaticResource AbaLateral}">
@@ -81,7 +81,7 @@
                     <TextBlock Text="recursos e drops" FontSize="10" Foreground="{StaticResource TextDim}" />
                 </StackPanel>
             </TabItem.Header>
-            <v:TuningView />
+            <v:TuningView x:Name="TelaAjustes" />
         </TabItem>
 
         <TabItem Style="{StaticResource AbaLateral}">

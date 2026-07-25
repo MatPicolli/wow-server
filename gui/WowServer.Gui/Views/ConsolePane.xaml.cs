@@ -21,10 +21,52 @@ public partial class ConsolePane : UserControl
     private readonly ObservableCollection<ConsoleLine> _linhas = new();
     private bool _rolagemAutomatica = true;
 
+    /// <summary>
+    /// Modo de quebra das linhas. DependencyProperty (e nao propriedade
+    /// comum) porque o DataTemplate se liga a ela: assim alternar o
+    /// checkbox reflete nas linhas ja exibidas, sem recriar a lista.
+    /// </summary>
+    public static readonly DependencyProperty QuebraProperty =
+        DependencyProperty.Register(
+            nameof(Quebra), typeof(TextWrapping), typeof(ConsolePane),
+            new PropertyMetadata(TextWrapping.Wrap));
+
+    public TextWrapping Quebra
+    {
+        get => (TextWrapping)GetValue(QuebraProperty);
+        set => SetValue(QuebraProperty, value);
+    }
+
+    /// <summary>Atalho booleano, para ligar ao estado salvo da interface.</summary>
+    public bool WrapEnabled
+    {
+        get => Quebra == TextWrapping.Wrap;
+        set
+        {
+            Quebra = value ? TextWrapping.Wrap : TextWrapping.NoWrap;
+            ChkQuebrar.IsChecked = value;
+        }
+    }
+
+    public event Action<bool>? WrapChanged;
+
     public ConsolePane()
     {
         InitializeComponent();
         Linhas.ItemsSource = _linhas;
+    }
+
+    private void Quebrar_Changed(object sender, RoutedEventArgs e)
+    {
+        var ligado = ChkQuebrar.IsChecked == true;
+        Quebra = ligado ? TextWrapping.Wrap : TextWrapping.NoWrap;
+
+        // Sem rolagem horizontal o item nao tem como exceder o viewport, que e
+        // justamente o que permite a quebra; com NoWrap ela precisa voltar.
+        ScrollViewer.SetHorizontalScrollBarVisibility(
+            Linhas, ligado ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
+
+        WrapChanged?.Invoke(ligado);
     }
 
     public event Action<string>? CommandSubmitted;

@@ -8,6 +8,7 @@ public partial class ServerView : UserControl
 {
     private ServerController? _servidor;
     private LogTailer? _authLog;
+    private bool _ladoALado = true;
 
     public ServerView()
     {
@@ -19,6 +20,21 @@ public partial class ServerView : UserControl
         PainelWorld.CommandSubmitted += EnviarComando;
 
         LadoALado_Click(this, new RoutedEventArgs());
+    }
+
+    public void LoadFrom(UiState estado)
+    {
+        PainelAuth.WrapEnabled = estado.ConsoleWrap;
+        PainelWorld.WrapEnabled = estado.ConsoleWrap;
+
+        if (estado.ServerSideBySide) LadoALado_Click(this, new RoutedEventArgs());
+        else Empilhado_Click(this, new RoutedEventArgs());
+    }
+
+    public void SaveTo(UiState estado)
+    {
+        estado.ConsoleWrap = PainelWorld.WrapEnabled;
+        estado.ServerSideBySide = _ladoALado;
     }
 
     private void EnviarComando(string comando)
@@ -138,6 +154,7 @@ public partial class ServerView : UserControl
 
     private void LadoALado_Click(object sender, RoutedEventArgs e)
     {
+        _ladoALado = true;
         ColSep.Width = new GridLength(10);
         Col1.Width = new GridLength(1, GridUnitType.Star);
         LinSep.Height = new GridLength(0);
@@ -149,6 +166,7 @@ public partial class ServerView : UserControl
 
     private void Empilhado_Click(object sender, RoutedEventArgs e)
     {
+        _ladoALado = false;
         ColSep.Width = new GridLength(0);
         Col1.Width = new GridLength(0);
         LinSep.Height = new GridLength(10);

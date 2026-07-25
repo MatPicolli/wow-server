@@ -12,9 +12,14 @@
                              VerticalAlignment="Center" Fill="{StaticResource TextDim}" />
                     <TextBlock x:Name="Titulo" Text="Console" FontWeight="SemiBold" FontSize="12"
                                VerticalAlignment="Center" />
-                    <TextBlock x:Name="Estado" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                               Foreground="{StaticResource TextDim}" FontSize="11"
-                               VerticalAlignment="Center" Text="parado" />
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <CheckBox x:Name="ChkQuebrar" Content="quebrar linha" IsChecked="True"
+                                  FontSize="11" Margin="0,0,12,0" VerticalAlignment="Center"
+                                  Checked="Quebrar_Changed" Unchecked="Quebrar_Changed" />
+                        <TextBlock x:Name="Estado"
+                                   Foreground="{StaticResource TextDim}" FontSize="11"
+                                   VerticalAlignment="Center" Text="parado" />
+                    </StackPanel>
                 </DockPanel>
             </Border>
 
@@ -32,8 +37,11 @@
                 </DockPanel>
             </Border>
 
+            <!-- HorizontalScrollBarVisibility=Disabled nao e so estetica: e ela
+                 que faz o item ser limitado a largura do viewport, sem isso o
+                 TextWrapping do TextBlock nao teria contra o que quebrar. -->
             <ListBox x:Name="Linhas" Background="Transparent" BorderThickness="0"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      VirtualizingPanel.IsVirtualizing="True"
                      VirtualizingPanel.VirtualizationMode="Recycling">
                 <ListBox.ItemContainerStyle>
@@ -53,8 +61,9 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Text="{Binding Text}" Foreground="{Binding Cor}"
-                                   FontFamily="Consolas" FontSize="12"
-                                   Padding="10,0" TextWrapping="NoWrap" />
+                                   FontFamily="Consolas" FontSize="12" Padding="10,0"
+                                   TextWrapping="{Binding Quebra,
+                                       RelativeSource={RelativeSource AncestorType=UserControl}}" />
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

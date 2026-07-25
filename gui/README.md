@@ -71,6 +71,16 @@ o resto. Digite sem o ponto.
 personagens. "Forçar encerramento" mata o processo e perde o que não foi
 gravado — é para quando travar.
 
+**O que é lembrado entre execuções.** Tamanho e posição da janela, aba aberta,
+layout dos painéis, quebra de linha e os multiplicadores digitados em Ajustes
+— mesmo os que você não chegou a aplicar. Fica em
+`%LOCALAPPDATA%\WowServerManager\ui-state.json`, separado do `settings.psd1`
+porque um é preferência de interface e o outro é configuração do servidor. Se o
+arquivo corromper, o programa abre com os padrões em vez de falhar.
+
+As **Configurações** (engrenagem) sempre foram persistentes: gravam direto no
+`config/settings.psd1`.
+
 **Painel do authserver.** Ele é alimentado pelo `Auth.log`, não pela saída do
 processo. Quando a saída padrão vai para um pipe em vez de um console, o
 runtime C troca buffer de linha por buffer de bloco (4 KB). O worldserver

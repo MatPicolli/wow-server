@@ -34,19 +34,37 @@ public partial class TuningView : UserControl
             Dispatcher.Invoke(() => Saida.Append(linha.Text, linha.Kind));
     }
 
+    /// <summary>Repoe o que o usuario tinha digitado na sessao anterior.</summary>
+    public void LoadFrom(UiState estado)
+    {
+        Aplicar(estado.ToGathering(), estado.ToDrops());
+        Saida.WrapEnabled = estado.ConsoleWrap;
+    }
+
+    public void SaveTo(UiState estado)
+    {
+        estado.From(LerColeta(), LerDrops());
+        estado.ConsoleWrap = Saida.WrapEnabled;
+    }
+
+    private void Aplicar(GatheringTuning g, DropChanceTuning d)
+    {
+        TxtMining.Text = Fmt(g.Mining);
+        TxtHerb.Text = Fmt(g.Herbalism);
+        TxtFish.Text = Fmt(g.Fishing);
+        TxtSkin.Text = Fmt(g.Skinning);
+        TxtDisench.Text = Fmt(g.Disenchanting);
+        TxtMill.Text = Fmt(g.Milling);
+        TxtProsp.Text = Fmt(g.Prospecting);
+        TxtQuest.Text = Fmt(d.QuestItems);
+        TxtCreature.Text = Fmt(d.CreatureItems);
+    }
+
     private void Preset_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: TuningPreset p }) return;
 
-        TxtMining.Text = Fmt(p.Gathering.Mining);
-        TxtHerb.Text = Fmt(p.Gathering.Herbalism);
-        TxtFish.Text = Fmt(p.Gathering.Fishing);
-        TxtSkin.Text = Fmt(p.Gathering.Skinning);
-        TxtDisench.Text = Fmt(p.Gathering.Disenchanting);
-        TxtMill.Text = Fmt(p.Gathering.Milling);
-        TxtProsp.Text = Fmt(p.Gathering.Prospecting);
-        TxtQuest.Text = Fmt(p.Drops.QuestItems);
-        TxtCreature.Text = Fmt(p.Drops.CreatureItems);
+        Aplicar(p.Gathering, p.Drops);
 
         Saida.Append($"==> perfil aplicado nos campos: {p.Name}");
         Saida.Append($"    {p.Description}");
