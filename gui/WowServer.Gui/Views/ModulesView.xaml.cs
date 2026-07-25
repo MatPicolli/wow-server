@@ -71,6 +71,12 @@ public partial class ModulesView : UserControl
         };
     }
 
+    /// <summary>
+    /// De onde o codigo-fonte foi realmente clonado. null quando nao ha clone,
+    /// ou quando o git nao respondeu.
+    /// </summary>
+    private string? _origemCore;
+
     private async Task AtualizarComConfiguracoesAsync()
     {
         if (Session.Current.Loaded is null)
@@ -85,7 +91,53 @@ public partial class ModulesView : UserControl
             }
         }
 
+        _origemCore = await DescobrirOrigemDoCoreAsync();
         Recarregar();
+    }
+
+    /// <summary>
+    /// Le a origem do clone que esta no disco.
+    ///
+    /// O settings.psd1 diz a intencao, o git diz o fato, e os dois podem
+    /// discordar: uma troca de core que grava as configuracoes e falha no clone
+    /// deixa exatamente esse estado. Julgar pela intencao faria a tela dizer que
+    /// esta tudo certo enquanto a compilacao continua falhando.
+    /// </summary>
+    private async Task<string?> DescobrirOrigemDoCoreAsync()
+    {
+        var origem = Session.Current.Loaded?.SourceDir;
+        if (string.IsNullOrWhiteSpace(origem)) return null;
+        if (!Directory.Exists(Path.Combine(origem, ".git"))) return null;
+
+        var url = await CapturarGitAsync(new[] { "-C", origem, "remote", "get-url", "origin" });
+        return string.IsNullOrWhiteSpace(url) ? null : url.Trim();
+    }
+
+    private static async Task<string> CapturarGitAsync(string[] argumentos)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "git",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var a in argumentos) psi.ArgumentList.Add(a);
+
+        try
+        {
+            using var p = Process.Start(psi);
+            if (p is null) return string.Empty;
+            var saida = await p.StandardOutput.ReadToEndAsync();
+            await p.WaitForExitAsync();
+            return p.ExitCode == 0 ? saida : string.Empty;
+        }
+        catch
+        {
+            // sem git no PATH nao da para verificar; o card diz isso
+            return string.Empty;
+        }
     }
 
     private string ModulesDir
@@ -115,11 +167,19 @@ public partial class ModulesView : UserControl
             // Um modulo de fork instalado sobre o core errado compila contra
             // assinaturas que nao existem e falha com dezenas de erros
             // C2660. Mostrar isso aqui evita uma compilacao inteira perdida.
+            //
+            // O que vale e o clone que esta no disco, nao o que o settings.psd1
+            // pretende. Comparar com a intencao ja escondeu o problema: uma
+            // troca anterior gravou 'Playerbot' nas configuracoes e falhou no
+            // clone, entao a tela dava tudo certo enquanto o rebuild.ps1 - que
+            // olha o git - recusava compilar.
+            var coreReal = _origemCore ?? cfg?.SourceRepository;
+
             var coreErrado = instalado
                 && m.Status == ModuleStatus.ExigeFork
                 && m.ForkRepository is not null
-                && cfg is not null
-                && !ModuleCatalog.SatisfiesFork(m, cfg.SourceRepository);
+                && coreReal is not null
+                && !ModuleCatalog.SatisfiesFork(m, coreReal);
 
             var (selo, cor) = m.Status switch
             {
@@ -128,9 +188,9 @@ public partial class ModulesView : UserControl
                 _ => ("oficial", (Brush)res["Accent"]),
             };
 
-            // Sem configuracoes nao da para saber se o core serve. Dizer
-            // "instalado" nesse caso seria afirmar algo que nao foi verificado.
-            var semConfig = instalado && m.Status == ModuleStatus.ExigeFork && cfg is null;
+            // Sem saber a origem do core nao da para julgar. Dizer "instalado"
+            // nesse caso seria afirmar algo que nao foi verificado.
+            var semConfig = instalado && m.Status == ModuleStatus.ExigeFork && coreReal is null;
 
             if (instalado) (selo, cor) = ("instalado", (Brush)res["Ok"]);
             if (semConfig) (selo, cor) = ("core não verificado", (Brush)res["Warn"]);
@@ -159,11 +219,7 @@ public partial class ModulesView : UserControl
                     AcaoModulo.Instalar => "Instalar",
                     _ => "Já instalado",
                 },
-                Alerta = coreErrado
-                    ? $"Este módulo está instalado, mas o código do servidor em uso é "
-                      + $"'{cfg!.SourceBranch}' de {cfg.SourceRepository}. Ele precisa de "
-                      + $"'{m.ForkBranch}' de {m.ForkRepository} — sem isso a compilação falha."
-                    : null,
+                Alerta = coreErrado ? MontarAlertaDeCore(m, coreReal!, cfg) : null,
                 PassoManual = m.ManualStep,
             });
         }
@@ -193,6 +249,28 @@ public partial class ModulesView : UserControl
 
         _todos = itens;
         AplicarFiltro();
+    }
+
+    /// <summary>
+    /// Texto do aviso de core incompativel. Quando o settings.psd1 discorda do
+    /// disco, os dois aparecem: essa diferenca e sintoma de uma troca de core
+    /// que foi gravada e nao chegou a clonar, e esconde-la deixaria o usuario
+    /// procurando o problema no lugar errado.
+    /// </summary>
+    private string MontarAlertaDeCore(CatalogModule m, string coreReal, ServerSettings? cfg)
+    {
+        var texto = $"Este módulo precisa do código '{m.ForkBranch}' de {m.ForkRepository}, "
+                  + $"mas o que está em disco veio de {coreReal}. Sem trocar, a compilação falha.";
+
+        if (_origemCore is not null && cfg is not null
+            && !ModuleCatalog.SameRepository(_origemCore, cfg.SourceRepository))
+        {
+            texto += $"\n\nAtenção: as configurações já apontam para {cfg.SourceRepository}, "
+                   + "mas o código no disco não. Uma troca anterior foi gravada e não chegou "
+                   + "a clonar. O botão abaixo refaz o clone.";
+        }
+
+        return texto;
     }
 
     /// <summary>Pastas em modules/ que o catalogo nao conhece.</summary>
@@ -538,13 +616,32 @@ public partial class ModulesView : UserControl
         {
             // -NoBuild: a compilacao vem depois, com a barra de progresso da
             // tela. Deixar o script compilar aqui esconderia o andamento.
-            codigo = await _runner.RunAsync("switch-core.ps1", new[]
+            codigo = await RodarTrocaAsync(modulo, pularBackup: false);
+
+            // 3 = o MySQL nao estava no ar, entao nao houve backup e nada foi
+            // alterado. Na linha de comando basta repetir com -SkipBackup;
+            // aqui o usuario nao tem onde digitar isso, e sem a pergunta ele
+            // ficaria sem saida.
+            if (codigo == 3)
             {
-                "-Repository", modulo.ForkRepository,
-                "-Branch", modulo.ForkBranch,
-                "-Apply",
-                "-NoBuild",
-            });
+                var seguir = MessageBox.Show(
+                    "O MySQL não está rodando, então não deu para fazer o backup.\n\n"
+                    + "A troca do código do servidor NÃO mexe no banco: seus personagens "
+                    + "e contas ficam onde estão. O backup é precaução para a compilação "
+                    + "seguinte, quando o worldserver aplica SQL.\n\n"
+                    + "Continuar sem backup?\n\n"
+                    + "(Cancelar é seguro: nada foi alterado ainda. Você pode iniciar o "
+                    + "MySQL e tentar de novo.)",
+                    "Sem backup", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+                if (seguir != MessageBoxResult.Yes)
+                {
+                    Saida.Append("    troca cancelada — nada foi alterado");
+                    return false;
+                }
+
+                codigo = await RodarTrocaAsync(modulo, pularBackup: true);
+            }
         }
         finally
         {
@@ -572,6 +669,20 @@ public partial class ModulesView : UserControl
         }
 
         return true;
+    }
+
+    private Task<int> RodarTrocaAsync(CatalogModule modulo, bool pularBackup)
+    {
+        var argumentos = new List<string>
+        {
+            "-Repository", modulo.ForkRepository!,
+            "-Branch", modulo.ForkBranch!,
+            "-Apply",
+            "-NoBuild",
+        };
+        if (pularBackup) argumentos.Add("-SkipBackup");
+
+        return _runner.RunAsync("switch-core.ps1", argumentos);
     }
 
     private async Task ClonarAsync(CatalogModule modulo)

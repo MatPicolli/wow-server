@@ -233,6 +233,12 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   This is what hid the "Corrigir o core" button for three rounds. Views also
   refresh on `IsVisibleChanged`, so state changed by a script outside the GUI
   shows up on returning to the tab.
+- **`settings.psd1` is intent; the git remote is fact.** They diverge whenever a
+  core switch writes the settings and then fails to clone. Anything that decides
+  whether the installed core is right must read
+  `git -C <SourceDir> remote get-url origin`, as `rebuild.ps1` always did — the
+  Modules screen compared against the settings instead, and so reported
+  everything fine while the build kept refusing. Show both when they disagree.
 
 ## Working conventions
 

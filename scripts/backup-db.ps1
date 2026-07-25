@@ -44,6 +44,13 @@ if (-not $dump) {
                "Adicione a pasta bin\ do MySQL ao PATH (o 01-install-prereqs.ps1 faz isso)."
 }
 
+# Perguntar antes evita o erro cru do mysqldump ("Got error: 2003 ... (10061)"),
+# que mistura servidor desligado com senha errada. Sao problemas diferentes.
+if (-not (Test-MySqlReachable -Settings $settings)) {
+    Write-Fail "o MySQL nao esta respondendo em $($m.Host):$($m.Port)." `
+               "Inicie o servico do MySQL e tente de novo. Se ele roda em outro endereco, ajuste MySql.Host/Port em config\settings.psd1."
+}
+
 if (-not $Path) { $Path = Join-Path $settings.Root 'backups' }
 New-DirectoryIfMissing $Path
 

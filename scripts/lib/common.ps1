@@ -529,6 +529,41 @@ function Write-TextFileNoBom {
     [IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
 }
 
+function Test-MySqlReachable {
+    <#
+        Diz se ha algo escutando na porta do MySQL.
+
+        E so um TCP connect: prova que o servidor esta no ar, nao que a senha
+        esteja certa. Serve exatamente para separar "o MySQL nao esta rodando"
+        de "a credencial esta errada" - dois problemas com solucoes diferentes,
+        que o erro cru do mysqldump nao distingue.
+
+        Nao usa o cliente mysql de proposito: precisa responder rapido e
+        funcionar mesmo antes de o cliente estar no PATH.
+    #>
+    param(
+        [Parameter(Mandatory)][hashtable]$Settings,
+        [int]$TimeoutMs = 1500
+    )
+
+    $m = $Settings.MySql
+    $cliente = $null
+    try {
+        $cliente = [Net.Sockets.TcpClient]::new()
+        $async = $cliente.BeginConnect($m.Host, $m.Port, $null, $null)
+
+        # Sem timeout explicito, uma porta filtrada trava o script por ~20s.
+        if (-not $async.AsyncWaitHandle.WaitOne($TimeoutMs)) { return $false }
+
+        $cliente.EndConnect($async)
+        return $true
+    } catch {
+        return $false
+    } finally {
+        if ($cliente) { try { $cliente.Close() } catch { } }
+    }
+}
+
 function Get-Psd1DuplicateKey {
     <#
         Chaves declaradas mais de uma vez no mesmo nivel do arquivo.

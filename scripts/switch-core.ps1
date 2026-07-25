@@ -42,6 +42,13 @@
 .PARAMETER SkipBackup
     Nao faz backup do banco antes. O padrao e fazer.
 
+.NOTES
+    Codigos de saida:
+        0  tudo certo (ou so uma previa)
+        1  falhou
+        3  o MySQL nao esta no ar, entao nao houve backup; nada foi alterado.
+           Repita com -SkipBackup para seguir mesmo assim.
+
 .PARAMETER NoBuild
     Troca o core e para, sem recompilar. Util para encadear outra coisa antes.
 
@@ -184,6 +191,24 @@ if (-not $Apply) {
 # que aplica SQL. Um backup antes custa segundos e ja salvou o dia.
 if ($SkipBackup) {
     Write-Warn 'pulando o backup do banco a seu pedido'
+} elseif (-not (Test-MySqlReachable -Settings $settings)) {
+    # Um MySQL desligado nao e motivo para desistir da troca - ela nao encosta
+    # no banco. Mas seguir calado seria prometer um backup que nao existe.
+    Write-Step 'Backup do banco'
+    Write-Warn "o MySQL nao esta respondendo em $($settings.MySql.Host):$($settings.MySql.Port)"
+    Write-Info 'a troca do core NAO mexe no banco: seus personagens e contas ficam onde estao.'
+    Write-Info 'o backup e precaucao para a compilacao seguinte, quando o worldserver aplica SQL.'
+    Write-Info ''
+    Write-Info 'escolha uma:'
+    Write-Info '  1) inicie o MySQL e rode este comando de novo (recomendado)'
+    Write-Info '  2) siga sem backup:  .\scripts\switch-core.ps1 -Playerbots -Apply -SkipBackup'
+    Write-Info ''
+    Write-Host '    [erro] sem MySQL no ar nao da para fazer backup. Nada foi alterado.' -ForegroundColor Red
+
+    # Codigo proprio, e nao Write-Fail: assim a GUI distingue "falhou por causa
+    # do backup" de qualquer outra falha, e pode oferecer o -SkipBackup - la ela
+    # nao tem como o usuario reescrever a linha de comando.
+    exit 3
 } else {
     Write-Step 'Backup do banco antes de mexer'
     & "$PSScriptRoot\backup-db.ps1"
