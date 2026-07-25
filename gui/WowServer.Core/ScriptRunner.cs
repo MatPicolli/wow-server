@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace WowServer.Core;
 
@@ -45,6 +46,13 @@ public sealed class ScriptRunner
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+
+            // Sem isso o .NET decodifica com a pagina de codigo ANSI do
+            // sistema, e texto UTF-8 vira "funÃ§Ã£o" em vez de "função". Os
+            // scripts forcam [Console]::OutputEncoding = UTF8 no lado deles
+            // (lib\common.ps1), entao as duas pontas combinam.
+            StandardOutputEncoding = new UTF8Encoding(false),
+            StandardErrorEncoding = new UTF8Encoding(false),
         };
 
         psi.ArgumentList.Add("-NoProfile");

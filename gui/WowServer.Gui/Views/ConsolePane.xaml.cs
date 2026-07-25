@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -133,6 +135,56 @@ public partial class ConsolePane : UserControl
     }
 
     public void SetAutoScroll(bool ligado) => _rolagemAutomatica = ligado;
+
+    /// <summary>Todo o conteudo do painel como texto puro.</summary>
+    public string GetText() => string.Join(Environment.NewLine, _linhas.Select(l => l.Text));
+
+    private void Copiar_Click(object sender, RoutedEventArgs e)
+    {
+        if (_linhas.Count == 0)
+        {
+            Estado.Text = "nada para copiar";
+            return;
+        }
+
+        // A area de transferencia pode estar momentaneamente presa por outro
+        // programa; SetText tem retry embutido e devolve sem lancar.
+        try
+        {
+            Clipboard.SetDataObject(GetText(), copy: true);
+            Estado.Text = $"{_linhas.Count} linhas copiadas";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Não consegui copiar: " + ex.Message + "\n\nUse 'salvar...' como alternativa.",
+                "Área de transferência ocupada");
+        }
+    }
+
+    private void Salvar_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Salvar o conteúdo do console",
+            Filter = "Texto|*.txt|Todos|*.*",
+            FileName = $"{Titulo.Text.Replace(" ", "-")}-{DateTime.Now:yyyyMMdd-HHmm}.txt",
+        };
+
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            // UTF-8 sem BOM: abre certo em qualquer editor e nao suja o inicio
+            // do arquivo se voce for colar o conteudo em outro lugar.
+            File.WriteAllText(dlg.FileName, GetText(), new UTF8Encoding(false));
+            Estado.Text = "salvo";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Não consegui salvar");
+        }
+    }
 
     private void Enviar_Click(object sender, RoutedEventArgs e) => Submeter();
 

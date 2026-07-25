@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace WowServer.Core;
 
@@ -102,6 +103,12 @@ public sealed class ServerController : IDisposable
             RedirectStandardInput = redirectInput,
             UseShellExecute = false,
             CreateNoWindow = true,
+
+            // O AzerothCore escreve UTF-8; decodificar com a pagina ANSI do
+            // sistema estragaria acentos e os caracteres de desenho do banner.
+            StandardOutputEncoding = new UTF8Encoding(false),
+            StandardErrorEncoding = new UTF8Encoding(false),
+            StandardInputEncoding = redirectInput ? new UTF8Encoding(false) : null,
         };
         psi.ArgumentList.Add("-c");
         psi.ArgumentList.Add(conf);

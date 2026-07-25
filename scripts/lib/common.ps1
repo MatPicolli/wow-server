@@ -6,6 +6,20 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Saida em UTF-8.
+#
+# Sem isso, o PowerShell escreve com a pagina de codigo do console (CP850 no
+# Windows em portugues) enquanto ferramentas como o MSBuild ja emitem UTF-8.
+# Quem estiver lendo o fluxo recebe duas codificacoes misturadas e acentos
+# viram coisas como "funÃ§Ã£o". Vale tanto para a GUI, que le por pipe, quanto
+# para o console normal.
+try {
+    [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+    $OutputEncoding = [Console]::OutputEncoding
+} catch {
+    # Alguns hosts nao permitem trocar; nao e motivo para abortar nada.
+}
+
 # Capturado no momento do dot-source: scripts/lib -> scripts -> raiz do repo
 $AcLibDir  = $PSScriptRoot
 $AcRepoDir = Split-Path -Parent (Split-Path -Parent $AcLibDir)
