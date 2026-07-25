@@ -13,7 +13,12 @@
                     <TextBlock x:Name="Titulo" Text="Console" FontWeight="SemiBold" FontSize="12"
                                VerticalAlignment="Center" />
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                        <CheckBox x:Name="ChkQuebrar" Content="quebrar linha" IsChecked="True"
+                        <!-- IsChecked NAO fica aqui de proposito: definir no XAML
+                             dispara o evento Checked durante o
+                             InitializeComponent, quando os elementos declarados
+                             mais abaixo (a ListBox) ainda nao existem. O valor
+                             inicial e definido no construtor. -->
+                        <CheckBox x:Name="ChkQuebrar" Content="quebrar linha"
                                   FontSize="11" Margin="0,0,12,0" VerticalAlignment="Center"
                                   Checked="Quebrar_Changed" Unchecked="Quebrar_Changed" />
                         <TextBlock x:Name="Estado"

@@ -54,10 +54,19 @@ public partial class ConsolePane : UserControl
     {
         InitializeComponent();
         Linhas.ItemsSource = _linhas;
+
+        // So agora todos os elementos existem, entao marcar o checkbox e
+        // seguro - o handler vai encontrar a ListBox montada.
+        ChkQuebrar.IsChecked = true;
     }
 
     private void Quebrar_Changed(object sender, RoutedEventArgs e)
     {
+        // Cinto de seguranca: se algum dia este evento voltar a disparar
+        // durante a construcao, sair calado e melhor do que derrubar a janela
+        // com uma excecao dentro de um setter de propriedade.
+        if (Linhas is null || ChkQuebrar is null) return;
+
         var ligado = ChkQuebrar.IsChecked == true;
         Quebra = ligado ? TextWrapping.Wrap : TextWrapping.NoWrap;
 
