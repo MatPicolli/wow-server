@@ -41,6 +41,13 @@
                                     <TextBlock Text="{Binding Detalhes}" Foreground="{StaticResource TextDim}"
                                                FontSize="12" TextWrapping="Wrap" Margin="0,6,0,10" />
 
+                                    <Border Background="#2A1D1D" BorderBrush="{StaticResource Err}"
+                                            BorderThickness="1" CornerRadius="3" Padding="8,6"
+                                            Margin="0,0,0,10" Visibility="{Binding VisibilidadeAlerta}">
+                                        <TextBlock Text="{Binding Alerta}" TextWrapping="Wrap"
+                                                   FontSize="11" Foreground="{StaticResource Err}" />
+                                    </Border>
+
                                     <StackPanel Orientation="Horizontal">
                                         <Button Content="{Binding TextoBotao}" Padding="10,4" FontSize="12"
                                                 Tag="{Binding Nome}" Click="Instalar_Click"

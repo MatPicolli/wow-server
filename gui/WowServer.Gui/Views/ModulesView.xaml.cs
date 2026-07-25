@@ -7,6 +7,8 @@ using WowServer.Core;
 
 namespace WowServer.Gui.Views;
 
+public enum AcaoModulo { Instalar, CorrigirCore, Nenhuma }
+
 public sealed class ModuloItem
 {
     public required string Nome { get; init; }
@@ -17,6 +19,9 @@ public sealed class ModuloItem
     public required Brush CorSelo { get; init; }
     public required string TextoBotao { get; init; }
     public required bool PodeInstalar { get; init; }
+    public required AcaoModulo Acao { get; init; }
+    public string? Alerta { get; init; }
+    public Visibility VisibilidadeAlerta => Alerta is null ? Visibility.Collapsed : Visibility.Visible;
 }
 
 public partial class ModulesView : UserControl
@@ -32,6 +37,24 @@ public partial class ModulesView : UserControl
             Dispatcher.Invoke(() => Saida.Append(linha.Text, linha.Kind));
 
         Recarregar();
+
+        // A deteccao de core incompativel depende das configuracoes; se esta
+        // tela abrir antes da de Configuracoes, elas ainda nao foram lidas.
+        Loaded += async (_, _) =>
+        {
+            if (Session.Current.Loaded is null)
+            {
+                try
+                {
+                    Session.Current.Loaded = await Session.Current.Settings.LoadAsync();
+                    Recarregar();
+                }
+                catch (Exception ex)
+                {
+                    Saida.Append($"[aviso] não consegui ler as configurações: {ex.Message}");
+                }
+            }
+        };
     }
 
     private string ModulesDir
@@ -48,10 +71,20 @@ public partial class ModulesView : UserControl
     {
         var res = Application.Current.Resources;
         var itens = new List<ModuloItem>();
+        var cfg = Session.Current.Loaded;
 
         foreach (var m in ModuleCatalog.All)
         {
             var instalado = Directory.Exists(Path.Combine(ModulesDir, m.Name));
+
+            // Um modulo de fork instalado sobre o core errado compila contra
+            // assinaturas que nao existem e falha com dezenas de erros
+            // C2660. Mostrar isso aqui evita uma compilacao inteira perdida.
+            var coreErrado = instalado
+                && m.Status == ModuleStatus.ExigeFork
+                && m.ForkRepository is not null
+                && cfg is not null
+                && !MesmoRepositorio(cfg.SourceRepository, m.ForkRepository);
 
             var (selo, cor) = m.Status switch
             {
@@ -60,21 +93,45 @@ public partial class ModulesView : UserControl
                 _ => ("oficial", (Brush)res["Accent"]),
             };
 
+            if (instalado) (selo, cor) = ("instalado", (Brush)res["Ok"]);
+            if (coreErrado) (selo, cor) = ("core incompatível", (Brush)res["Err"]);
+
+            var acao = coreErrado ? AcaoModulo.CorrigirCore
+                     : instalado ? AcaoModulo.Nenhuma
+                     : AcaoModulo.Instalar;
+
             itens.Add(new ModuloItem
             {
                 Nome = m.DisplayName,
                 Resumo = m.Summary,
                 Detalhes = m.Details,
                 Repositorio = m.Repository,
-                Selo = instalado ? "instalado" : selo,
-                CorSelo = instalado ? (Brush)res["Ok"] : cor,
-                TextoBotao = instalado ? "Já instalado" : "Instalar",
-                PodeInstalar = !instalado,
+                Selo = selo,
+                CorSelo = cor,
+                Acao = acao,
+                PodeInstalar = acao != AcaoModulo.Nenhuma,
+                TextoBotao = acao switch
+                {
+                    AcaoModulo.CorrigirCore => "Corrigir o core",
+                    AcaoModulo.Instalar => "Instalar",
+                    _ => "Já instalado",
+                },
+                Alerta = coreErrado
+                    ? $"Este módulo está instalado, mas o código do servidor em uso é "
+                      + $"'{cfg!.SourceBranch}' de {cfg.SourceRepository}. Ele precisa de "
+                      + $"'{m.ForkBranch}' de {m.ForkRepository} — sem isso a compilação falha."
+                    : null,
             });
         }
 
         Lista.ItemsSource = itens;
     }
+
+    private static bool MesmoRepositorio(string a, string b) =>
+        string.Equals(
+            a.Trim().TrimEnd('/').Replace(".git", "", StringComparison.OrdinalIgnoreCase),
+            b.Trim().TrimEnd('/').Replace(".git", "", StringComparison.OrdinalIgnoreCase),
+            StringComparison.OrdinalIgnoreCase);
 
     private void Abrir_Click(object sender, RoutedEventArgs e)
     {
@@ -88,6 +145,10 @@ public partial class ModulesView : UserControl
 
         var modulo = ModuleCatalog.All.FirstOrDefault(m => m.DisplayName == display);
         if (modulo is null) return;
+
+        // "Corrigir o core": o modulo ja esta na pasta, o que falta e o
+        // codigo-fonte certo por baixo dele.
+        var jaClonado = Directory.Exists(Path.Combine(ModulesDir, modulo.Name));
 
         if (modulo.Status == ModuleStatus.ExigeFork)
         {
@@ -111,6 +172,11 @@ public partial class ModulesView : UserControl
             // modulo sobre o core errado compila contra assinaturas que nao
             // existem e enche a tela de erros C2660.
             if (!await TrocarParaForkAsync(modulo)) return;
+        }
+        else if (jaClonado)
+        {
+            Saida.Append($"[aviso] {modulo.Name} já está instalado");
+            return;
         }
 
         await ClonarAsync(modulo);
@@ -169,7 +235,7 @@ public partial class ModulesView : UserControl
         {
             if (string.Equals(nome, modulo.Name, StringComparison.OrdinalIgnoreCase)) continue;
             Saida.Append($"==> reinstalando {nome}");
-            await RodarGitAsync(new[] { "clone", url, Path.Combine(ModulesDir, nome) });
+            await RodarGitAsync(new[] { "clone", "--recurse-submodules", url, Path.Combine(ModulesDir, nome) });
         }
 
         return true;
@@ -230,7 +296,10 @@ public partial class ModulesView : UserControl
         }
 
         Saida.Append($"==> clonando {modulo.Name}");
-        await RodarGitAsync(new[] { "clone", modulo.Repository, destino });
+        // --recurse-submodules: modulos como o Eluna trazem a engine Lua
+        // como submodulo, e sem ele a compilacao falha com "lua.h: No such
+        // file or directory".
+        await RodarGitAsync(new[] { "clone", "--recurse-submodules", modulo.Repository, destino });
     }
 
     private async void Atualizar_Click(object sender, RoutedEventArgs e)
@@ -246,6 +315,7 @@ public partial class ModulesView : UserControl
             if (!Directory.Exists(Path.Combine(dir, ".git"))) continue;
             Saida.Append($"==> atualizando {Path.GetFileName(dir)}");
             await RodarGitAsync(new[] { "-C", dir, "pull", "--ff-only" });
+            await RodarGitAsync(new[] { "-C", dir, "submodule", "update", "--init", "--recursive" });
         }
     }
 

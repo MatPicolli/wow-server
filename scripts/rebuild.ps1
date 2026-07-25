@@ -38,10 +38,13 @@ $modulesDir = Join-Path $settings.SourceDir 'modules'
 # --- o que esta instalado --------------------------------------------------
 Write-Step "Modulos em $modulesDir"
 
+# Nao exigir CMakeLists.txt na raiz: a maioria dos modulos do AzerothCore nao
+# tem um - quem os agrega e o CMakeLists do proprio core. Exigir isso escondia
+# quase todos os modulos instalados desta listagem.
 $modulos = @()
 if (Test-Path $modulesDir) {
     $modulos = Get-ChildItem $modulesDir -Directory -ErrorAction SilentlyContinue |
-               Where-Object { Test-Path (Join-Path $_.FullName 'CMakeLists.txt') }
+               Where-Object { $_.Name -notmatch '^\.' }
 }
 
 if (-not $modulos) {
@@ -54,6 +57,18 @@ if (-not $modulos) {
         $rev = ''
         if (Test-Path (Join-Path $mod.FullName '.git')) {
             try { $rev = (git -C $mod.FullName rev-parse --short HEAD 2>$null | Out-String).Trim() } catch { }
+
+            # Alguns modulos trazem dependencias como submodulo - o Eluna traz
+            # a engine Lua assim. Sem inicializar, a compilacao morre com
+            # "lua.h: No such file or directory".
+            if (Test-Path (Join-Path $mod.FullName '.gitmodules')) {
+                Write-Info "$($mod.Name): sincronizando submodulos"
+                try {
+                    git -C $mod.FullName submodule update --init --recursive 2>&1 | Out-Null
+                } catch {
+                    Write-Warn "nao consegui atualizar os submodulos de $($mod.Name)"
+                }
+            }
         }
         Write-Ok ("{0,-32} {1}" -f $mod.Name, $rev)
     }
