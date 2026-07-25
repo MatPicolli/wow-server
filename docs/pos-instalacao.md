@@ -184,6 +184,51 @@ Pra jogar sozinho, o mais popular é o
 formam grupo e raide com você. Ele fica num fork do core, então exige um clone
 diferente; siga o README dele.
 
+### Rendimento de profissões (minério, erva, pesca, couro)
+
+O `worldserver.conf` controla **chance** de drop, não **quantidade**. Quanto
+cada nódulo de minério ou erva entrega está no `MinCount`/`MaxCount` das
+tabelas de loot do banco `acore_world`. Tem um script pra isso:
+
+```powershell
+# preview — não altera nada
+.\scripts\tune-professions.ps1 -Mining 3 -Herbalism 3
+
+# aplicar
+.\scripts\tune-professions.ps1 -Mining 3 -Herbalism 3 -Apply
+
+# tudo (mineração, herbalismo, pesca, esfolamento) em dobro
+.\scripts\tune-professions.ps1 -All 2 -Apply
+
+# voltar ao original
+.\scripts\tune-professions.ps1 -Reset -Apply
+```
+
+Com `-Mining 3`, um veio de cobre que dava 2–4 passa a dar 6–12.
+
+Depois de aplicar, recarregue sem reiniciar — no console do worldserver:
+
+```
+reload gameobject_loot_template
+reload fishing_loot_template
+reload skinning_loot_template
+```
+
+**Por que ele não acumula:** os valores originais são copiados pra tabela
+`custom_gather_backup` na primeira execução, e todo cálculo parte dela. Rodar
+`-Mining 3` duas vezes continua sendo 3x, não 9x; trocar depois pra `-Mining 2`
+recalcula em cima do original. O `-Reset` restaura os valores exatos e
+descarta o backup.
+
+O SQL gerado é salvo em `data/sql/custom/db_world/tune_professions.sql`, que o
+auto-updater aplica sozinho — então a customização sobrevive a recriar o banco
+do zero.
+
+Mineração e herbalismo saem os dois de `gameobject_loot_template` (os nódulos
+são gameobjects do tipo baú); o script separa um do outro pela classe do item
+(7/7 = metal e pedra, 7/9 = erva). Baús comuns e o resto do loot não são
+tocados.
+
 ### Ajustes sem módulo
 
 Muita coisa está no `worldserver.conf`:
