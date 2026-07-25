@@ -104,6 +104,19 @@ function Set-StageComplete {
     }
 }
 
+function Clear-OutputDir {
+    <#
+        O vmap4_extractor se recusa a rodar se a pasta de saida nao estiver
+        vazia ("Your output directory seems to be polluted"). Entao, quando a
+        decisao e mesmo refazer a etapa, a saida parcial tem que sair antes.
+    #>
+    param([string]$Name)
+    $dir = Join-Path $client $Name
+    if (-not (Test-Path $dir)) { return }
+    Write-Info "limpando saida parcial em $Name\ ..."
+    Remove-Item (Join-Path $dir '*') -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 function Test-StageComplete {
     <#
         -IndexFilter/-ExpectedTotal sao um plano B pra instalacoes que ja
@@ -192,10 +205,18 @@ if ($doMaps) {
 # --- 2. Buildings ----------------------------------------------------------
 if ($doVmaps) {
     Write-Step "2/4  Buildings, materia-prima dos vmaps  (~20-40 min)"
+    # Buildings so existe pra alimentar os vmaps. Se os vmaps ja estao
+    # completos, Buildings cumpriu seu papel - reextrair 40 minutos dele por
+    # causa de um marcador ausente nao faz sentido nenhum.
+    if ((Test-StageComplete -Name 'vmaps' -IndexFilter '*.vmtree' -ExpectedTotal $mapCount) -and -not $Force) {
+        Set-StageComplete -Name 'Buildings'
+    }
+
     if ((Test-StageComplete -Name 'Buildings') -and -not $Force) {
         Write-Ok "ja extraido, pulando"
     } else {
         if (-not $exeVmapExtractor) { Write-Fail "Extractor de vmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
+        Clear-OutputDir -Name 'Buildings'
         Invoke-Extractor -Exe $exeVmapExtractor -Label 'Extraindo Buildings' `
                          -WatchDir (Join-Path $client 'Buildings') -WatchFilter '*'
         Set-StageComplete -Name 'Buildings'
@@ -206,8 +227,9 @@ if ($doVmaps) {
     if ((Test-StageComplete -Name 'vmaps' -IndexFilter '*.vmtree' -ExpectedTotal $mapCount) -and -not $Force) {
         Write-Ok "ja montado, pulando"
     } else {
-        New-DirectoryIfMissing (Join-Path $client 'vmaps')
         if (-not $exeVmapAssembler) { Write-Fail "Montador de vmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
+        Clear-OutputDir -Name 'vmaps'
+        New-DirectoryIfMissing (Join-Path $client 'vmaps')
         Invoke-Extractor -Exe $exeVmapAssembler -Arguments @('Buildings', 'vmaps') -Label 'Montando vmaps' `
                          -WatchDir (Join-Path $client 'vmaps') -WatchFilter '*.vmtree' -ExpectedTotal $mapCount
         Set-StageComplete -Name 'vmaps'
