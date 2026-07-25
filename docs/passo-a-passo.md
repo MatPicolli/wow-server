@@ -111,11 +111,14 @@ Deve ter:
 
 ```
 authserver.exe        worldserver.exe
-mapextractor.exe      vmap4extractor.exe
-vmap4assembler.exe    mmaps_generator.exe
+map_extractor.exe     vmap4_extractor.exe
+vmap4_assembler.exe   mmaps_generator.exe
 configs\authserver.conf.dist
 configs\worldserver.conf.dist
 ```
+
+> Versões mais antigas do AzerothCore geravam esses nomes sem underscore
+> (`mapextractor.exe`). Os scripts aceitam as duas grafias.
 
 ---
 
@@ -150,14 +153,14 @@ do `Wow.exe`), abra um terminal ali e rode **nesta ordem**:
 
 ```powershell
 # 1. dbc, maps e Cameras  (5-15 min)
-.\mapextractor.exe
+.\map_extractor.exe
 
 # 2. Buildings — matéria-prima dos vmaps  (20-40 min)
-.\vmap4extractor.exe
+.\vmap4_extractor.exe
 
 # 3. montar os vmaps  (5-10 min)
 mkdir vmaps
-.\vmap4assembler.exe Buildings vmaps
+.\vmap4_assembler.exe Buildings vmaps
 
 # 4. mmaps — pathfinding  (1-6 HORAS)
 mkdir mmaps

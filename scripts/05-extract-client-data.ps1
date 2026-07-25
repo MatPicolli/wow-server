@@ -39,23 +39,41 @@ $client  = $settings.ClientDir
 $binDir  = Join-Path $settings.BuildDir "bin\$($settings.BuildConfig)"
 $dataDir = Join-Path $settings.ServerDir 'Data'
 
-if (-not (Test-Path (Join-Path $binDir 'mapextractor.exe'))) {
-    Write-Fail "Nao achei os extractors em '$binDir'." `
-               "Rode 03-build.ps1 com TOOLS_BUILD=all (o padrao)."
-}
-
 $free = Get-FreeSpaceGB -Path $client
 if ($null -ne $free -and $free -lt 25) {
     Write-Warn "So $free GB livres em $([IO.Path]::GetPathRoot($client)). A extracao gera ~20 GB temporarios."
 }
 
 # --- copiar os extractors pro client ---------------------------------------
+function Resolve-ToolName {
+    <#
+        O AzerothCore renomeou os extractors de 'mapextractor' para
+        'map_extractor' em algum ponto. Aceita as duas grafias e devolve a que
+        existir de fato em $binDir.
+    #>
+    param([string[]]$Names)
+    foreach ($n in $Names) {
+        if (Test-Path (Join-Path $binDir $n)) { return $n }
+    }
+    return $null
+}
+
+$exeMapExtractor   = Resolve-ToolName @('map_extractor.exe',   'mapextractor.exe')
+$exeVmapExtractor  = Resolve-ToolName @('vmap4_extractor.exe', 'vmap4extractor.exe')
+$exeVmapAssembler  = Resolve-ToolName @('vmap4_assembler.exe', 'vmap4assembler.exe')
+$exeMmapsGenerator = Resolve-ToolName @('mmaps_generator.exe')
+
+if (-not $exeMapExtractor -and -not $exeVmapExtractor -and -not $exeMmapsGenerator) {
+    Write-Fail "Nao achei nenhum extractor em '$binDir'." `
+               "Rode 03-build.ps1 com TOOLS_BUILD=all (o padrao)."
+}
+
 Write-Step "Copiando os extractors para a pasta do client"
-$tools = @('mapextractor.exe', 'vmap4extractor.exe', 'vmap4assembler.exe', 'mmaps_generator.exe')
+$tools = @($exeMapExtractor, $exeVmapExtractor, $exeVmapAssembler, $exeMmapsGenerator) |
+         Where-Object { $_ }
 foreach ($t in $tools) {
-    $srcTool = Join-Path $binDir $t
-    if (Test-Path $srcTool) { Copy-Item $srcTool $client -Force }
-    else { Write-Warn "$t nao existe em $binDir" }
+    Copy-Item (Join-Path $binDir $t) $client -Force
+    Write-Ok $t
 }
 # arquivos auxiliares que o mmaps_generator le, quando presentes
 foreach ($aux in @('mmaps-config.yaml', 'offmesh.txt')) {
@@ -88,7 +106,8 @@ if ($doMaps) {
     if ((Test-ExtractedDir 'dbc') -and (Test-ExtractedDir 'maps') -and -not $Force) {
         Write-Ok "ja extraido, pulando (use -Force pra refazer)"
     } else {
-        Invoke-Extractor -Exe 'mapextractor.exe' -Label 'extracao de dbc/maps'
+        if (-not $exeMapExtractor) { Write-Fail "Extractor de mapas nao encontrado em '$binDir'." "Rode 03-build.ps1." }
+        Invoke-Extractor -Exe $exeMapExtractor -Label 'extracao de dbc/maps'
     }
 }
 
@@ -98,7 +117,8 @@ if ($doVmaps) {
     if ((Test-ExtractedDir 'Buildings') -and -not $Force) {
         Write-Ok "ja extraido, pulando"
     } else {
-        Invoke-Extractor -Exe 'vmap4extractor.exe' -Label 'extracao de Buildings'
+        if (-not $exeVmapExtractor) { Write-Fail "Extractor de vmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
+        Invoke-Extractor -Exe $exeVmapExtractor -Label 'extracao de Buildings'
     }
 
     # --- 3. montar os vmaps ------------------------------------------------
@@ -107,7 +127,8 @@ if ($doVmaps) {
         Write-Ok "ja montado, pulando"
     } else {
         New-DirectoryIfMissing (Join-Path $client 'vmaps')
-        Invoke-Extractor -Exe 'vmap4assembler.exe' -Arguments @('Buildings', 'vmaps') -Label 'montagem dos vmaps'
+        if (-not $exeVmapAssembler) { Write-Fail "Montador de vmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
+        Invoke-Extractor -Exe $exeVmapAssembler -Arguments @('Buildings', 'vmaps') -Label 'montagem dos vmaps'
     }
 }
 
@@ -126,7 +147,8 @@ if ($doMmaps) {
         $threads = if ($MmapThreads -gt 0) { $MmapThreads } else { Get-ThreadCount -Settings $settings }
         Write-Info "usando $threads threads - a maquina vai ficar pesada"
         Write-Info "NAO feche a janela; termina quando aparecer 'Press any key'"
-        Invoke-Extractor -Exe 'mmaps_generator.exe' -Arguments @('--threads', "$threads") -Label 'geracao dos mmaps'
+        if (-not $exeMmapsGenerator) { Write-Fail "Gerador de mmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
+        Invoke-Extractor -Exe $exeMmapsGenerator -Arguments @('--threads', "$threads") -Label 'geracao dos mmaps'
     }
 }
 

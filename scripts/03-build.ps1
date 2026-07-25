@@ -131,10 +131,28 @@ Write-Ok ("compilado em {0:hh\:mm\:ss}" -f $elapsed)
 
 # --- conferir a saida ------------------------------------------------------
 $binDir = Join-Path $build "bin\$config"
-$expected = @('authserver.exe', 'worldserver.exe')
-if (-not $SkipTools) { $expected += @('mapextractor.exe', 'vmap4extractor.exe', 'vmap4assembler.exe', 'mmaps_generator.exe') }
 
-$missing = $expected | Where-Object { -not (Test-Path (Join-Path $binDir $_)) }
+# Cada entrada e uma lista de nomes aceitos pro mesmo binario: o AzerothCore
+# renomeou os extractors de 'mapextractor' para 'map_extractor' em algum ponto,
+# e as duas grafias circulam por ai.
+$expected = @(
+    @('authserver.exe'),
+    @('worldserver.exe')
+)
+if (-not $SkipTools) {
+    $expected += @(
+        @('map_extractor.exe',   'mapextractor.exe'),
+        @('vmap4_extractor.exe', 'vmap4extractor.exe'),
+        @('vmap4_assembler.exe', 'vmap4assembler.exe'),
+        @('mmaps_generator.exe')
+    )
+}
+
+$missing = @()
+foreach ($alternatives in $expected) {
+    $found = $alternatives | Where-Object { Test-Path (Join-Path $binDir $_) } | Select-Object -First 1
+    if (-not $found) { $missing += ($alternatives -join ' ou ') }
+}
 if ($missing) {
     Write-Fail "A compilacao terminou mas faltam binarios: $($missing -join ', ')" `
                "Veja o log acima. Se foi so um projeto que falhou, rode de novo - as vezes e paralelismo."
