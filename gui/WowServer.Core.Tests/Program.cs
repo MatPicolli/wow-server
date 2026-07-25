@@ -587,6 +587,7 @@ var sqlVazio = ItemBrowser.BuildQuery(new ItemFilter(), "acore_world");
 Check("consulta sem filtro nao tem WHERE", !sqlVazio.Contains("WHERE"), sqlVazio);
 Check("consulta usa o banco informado", sqlVazio.Contains("`acore_world`.item_template"));
 Check("consulta tem limite", sqlVazio.Contains("LIMIT 200"));
+Check("consulta traz o displayid", sqlVazio.Contains("displayid"));
 
 var sqlFiltrado = ItemBrowser.BuildQuery(
     new ItemFilter { Name = "espada", Class = 2, Quality = 4, MinLevel = 60, MaxLevel = 80, Limit = 50 },
@@ -622,7 +623,7 @@ var linha = string.Join("\t", new[]
 {
     "12345", "Espada de Teste", "2", "7", "4", "13", "213", "80", "2", "0",
     "150.5", "250.75", "2600", "105", "48500", "1",
-    "4", "35", "7", "42", "32", "18", "0", "0", "0", "0", "Uma espada de teste",
+    "4", "35", "7", "42", "32", "18", "0", "0", "0", "0", "Uma espada de teste", "31265",
 });
 var item = ItemBrowser.ParseRow(linha);
 Check("le a linha do mysql", item is not null);
@@ -631,6 +632,7 @@ Check("le dano decimal", Math.Abs(item.DmgMin - 150.5) < 0.01, item.DmgMin.ToStr
 Check("le tres atributos preenchidos", item.Stats.Count == 3, item.Stats.Count.ToString());
 Check("descarta atributos zerados", item.Stats.All(s => s.Value != 0));
 Check("le a descricao", item.Description == "Uma espada de teste");
+Check("le o displayid, que liga ao icone", item.DisplayId == 31265, item.DisplayId.ToString());
 
 Check("cabecalho nao vira item", ItemBrowser.ParseRow("entry\tname\tclass") is null);
 Check("linha vazia nao vira item", ItemBrowser.ParseRow("") is null);
@@ -669,7 +671,7 @@ var simples = ItemBrowser.ParseRow(string.Join("\t", new[]
 {
     "999", "Pano de Linho", "7", "5", "1", "0", "1", "1", "0", "0",
     "0", "0", "0", "0", "10", "20",
-    "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "",
+    "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "", "1542",
 }))!;
 var balaoSimples = ItemTooltip.Build(simples);
 Check("item sem dano nao mostra dps", !balaoSimples.Any(l => l.Text.Contains("por segundo")));
@@ -807,6 +809,369 @@ else
         .ToList();
     Check("nenhuma ajuda ficou sem campo que a use", orfas.Count == 0, string.Join(", ", orfas));
 }
+
+
+// ---- icones: BLP e MPQ ----------------------------------------------------
+// Os dois formatos sao construidos aqui e lidos de volta pelo codigo de
+// verdade. Nao substitui testar contra um client real, mas prova que o
+// decodificador entende arquivos validos - e um erro de bit aparece na hora.
+
+static byte[] MontarBlp(byte encoding, byte alphaDepth, byte alphaEncoding,
+                        int w, int h, byte[] corpo, byte[]? paleta = null)
+{
+    var cabecalho = new byte[148 + 256 * 4];
+    cabecalho[0] = (byte)'B'; cabecalho[1] = (byte)'L';
+    cabecalho[2] = (byte)'P'; cabecalho[3] = (byte)'2';
+    BitConverter.GetBytes((uint)1).CopyTo(cabecalho, 4);
+    cabecalho[8] = encoding; cabecalho[9] = alphaDepth; cabecalho[10] = alphaEncoding;
+    BitConverter.GetBytes((uint)w).CopyTo(cabecalho, 12);
+    BitConverter.GetBytes((uint)h).CopyTo(cabecalho, 16);
+
+    var offsetCorpo = (uint)cabecalho.Length;
+    BitConverter.GetBytes(offsetCorpo).CopyTo(cabecalho, 20);
+    BitConverter.GetBytes((uint)corpo.Length).CopyTo(cabecalho, 20 + 16 * 4);
+
+    if (paleta is not null) paleta.CopyTo(cabecalho, 148);
+
+    var todo = new byte[cabecalho.Length + corpo.Length];
+    cabecalho.CopyTo(todo, 0);
+    corpo.CopyTo(todo, cabecalho.Length);
+    return todo;
+}
+
+Check("reconhece um BLP2", BlpImage.IsBlp(MontarBlp(3, 8, 0, 1, 1, new byte[4])));
+Check("recusa o que nao e BLP", !BlpImage.IsBlp(new byte[] { 1, 2, 3, 4 }));
+
+// BGRA direto: o caminho mais simples, serve de referencia
+var bgra = new byte[] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160 };
+var direto = BlpImage.Decode(MontarBlp(3, 8, 0, 2, 2, bgra));
+Check("BGRA: tamanho lido", direto.Width == 2 && direto.Height == 2);
+Check("BGRA: pixels intactos", direto.Bgra.SequenceEqual(bgra));
+
+// paleta: indice por pixel + alfa separado
+var paleta = new byte[256 * 4];
+paleta[0] = 1; paleta[1] = 2; paleta[2] = 3;          // cor 0
+paleta[4] = 200; paleta[5] = 150; paleta[6] = 100;    // cor 1
+var comPaleta = BlpImage.Decode(
+    MontarBlp(1, 8, 0, 2, 1, new byte[] { 1, 0, 250, 30 }, paleta));
+Check("paleta: primeira cor", comPaleta.Bgra[0] == 200 && comPaleta.Bgra[1] == 150 && comPaleta.Bgra[2] == 100);
+Check("paleta: segunda cor", comPaleta.Bgra[4] == 1 && comPaleta.Bgra[5] == 2 && comPaleta.Bgra[6] == 3);
+Check("paleta: alfa separado", comPaleta.Bgra[3] == 250 && comPaleta.Bgra[7] == 30);
+
+// DXT1: bloco de cor unica. c0 = branco puro em RGB565.
+var dxt1 = new byte[8];
+BitConverter.GetBytes((ushort)0xFFFF).CopyTo(dxt1, 0);   // c0 branco
+BitConverter.GetBytes((ushort)0x0000).CopyTo(dxt1, 2);   // c1 preto
+BitConverter.GetBytes((uint)0).CopyTo(dxt1, 4);          // todos indice 0
+var img1 = BlpImage.Decode(MontarBlp(2, 0, 0, 4, 4, dxt1));
+Check("DXT1: 4x4 decodificado", img1.Width == 4 && img1.Height == 4);
+Check("DXT1: branco vira 255 em todo canal",
+      img1.Bgra[0] == 255 && img1.Bgra[1] == 255 && img1.Bgra[2] == 255,
+      $"{img1.Bgra[0]},{img1.Bgra[1]},{img1.Bgra[2]}");
+Check("DXT1: opaco", img1.Bgra[3] == 255);
+
+// DXT5: alfa constante em 255
+var dxt5 = new byte[16];
+dxt5[0] = 255; dxt5[1] = 255;                            // a0 = a1 = 255
+BitConverter.GetBytes((ushort)0xFFFF).CopyTo(dxt5, 8);
+BitConverter.GetBytes((ushort)0x0000).CopyTo(dxt5, 10);
+var img5 = BlpImage.Decode(MontarBlp(2, 8, 7, 4, 4, dxt5));
+Check("DXT5: decodifica", img5.Width == 4);
+Check("DXT5: alfa cheio", img5.Bgra[3] == 255, img5.Bgra[3].ToString());
+
+Check("BLP truncado e recusado",
+      Throws(() => BlpImage.Decode(new byte[] { (byte)'B', (byte)'L', (byte)'P', (byte)'2' })));
+Check("encoding desconhecido e recusado",
+      Throws(() => BlpImage.Decode(MontarBlp(9, 0, 0, 2, 2, new byte[16]))));
+
+// PNG: cabecalho, e o zlib de dentro tem que abrir
+var png = BlpImage.ToPng(direto);
+Check("PNG comeca com a assinatura",
+      png[0] == 0x89 && png[1] == (byte)'P' && png[2] == (byte)'N' && png[3] == (byte)'G');
+Check("PNG tem IHDR e IEND",
+      System.Text.Encoding.ASCII.GetString(png).Contains("IHDR")
+      && System.Text.Encoding.ASCII.GetString(png).Contains("IEND"));
+Check("PNG declara o tamanho certo",
+      png[16] == 0 && png[17] == 0 && png[18] == 0 && png[19] == 2
+      && png[23] == 2, "largura/altura no IHDR");
+
+static bool Throws(Action a) { try { a(); return false; } catch { return true; } }
+
+// --- MPQ: um arquivo montado a mao, lido de volta
+static byte[] MontarMpq(string nomeInterno, byte[] conteudo, bool comprimir)
+{
+    const int entradasHash = 4;
+    var corpo = conteudo;
+
+    if (comprimir)
+    {
+        using var ms = new MemoryStream();
+        ms.WriteByte(0x02);   // metodo zlib
+        using (var z = new System.IO.Compression.ZLibStream(
+                   ms, System.IO.Compression.CompressionLevel.Optimal, true))
+            z.Write(conteudo);
+        corpo = ms.ToArray();
+    }
+
+    var cabecalho = 32;
+    var posDados = cabecalho;
+    var posHash = posDados + corpo.Length;
+    var posBloco = posHash + entradasHash * 16;
+    var total = posBloco + 16;
+
+    var mpq = new byte[total];
+    // Mesmo layout que o leitor espera; se um dos dois estiver errado, o
+    // arquivo montado aqui nao abre.
+    BitConverter.GetBytes(0x1A51504Du).CopyTo(mpq, 0);
+    BitConverter.GetBytes((uint)cabecalho).CopyTo(mpq, 4);
+    BitConverter.GetBytes((uint)total).CopyTo(mpq, 8);
+    BitConverter.GetBytes((ushort)0).CopyTo(mpq, 12);      // formatVersion
+    BitConverter.GetBytes((ushort)3).CopyTo(mpq, 14);      // setor = 512 << 3
+    BitConverter.GetBytes((uint)posHash).CopyTo(mpq, 16);
+    BitConverter.GetBytes((uint)posBloco).CopyTo(mpq, 20);
+    BitConverter.GetBytes((uint)entradasHash).CopyTo(mpq, 24);
+    BitConverter.GetBytes((uint)1).CopyTo(mpq, 28);
+
+    corpo.CopyTo(mpq, posDados);
+
+    // tabela hash: tudo vazio (0xFFFFFFFF), menos a entrada do arquivo
+    var hash = new uint[entradasHash * 4];
+    for (var i = 0; i < hash.Length; i++) hash[i] = 0xFFFFFFFF;
+
+    var slot = (int)(MpqArchive.Hash(nomeInterno, 0) & (entradasHash - 1));
+    hash[slot * 4 + 0] = MpqArchive.Hash(nomeInterno, 1);
+    hash[slot * 4 + 1] = MpqArchive.Hash(nomeInterno, 2);
+    hash[slot * 4 + 2] = 0;
+    hash[slot * 4 + 3] = 0;
+
+    var bloco = new uint[4];
+    bloco[0] = (uint)posDados;
+    bloco[1] = (uint)corpo.Length;
+    bloco[2] = (uint)conteudo.Length;
+    bloco[3] = 0x80000000 | 0x01000000 | (comprimir ? 0x00000200u : 0u);
+
+    Criptografar(hash, MpqArchive.Hash("(hash table)", 3));
+    Criptografar(bloco, MpqArchive.Hash("(block table)", 3));
+
+    Buffer.BlockCopy(hash, 0, mpq, posHash, hash.Length * 4);
+    Buffer.BlockCopy(bloco, 0, mpq, posBloco, bloco.Length * 4);
+    return mpq;
+}
+
+// O inverso do Descriptografar do leitor; se um dos dois estiver errado, o
+// arquivo montado aqui nao abre.
+static void Criptografar(uint[] dados, uint chave)
+{
+    uint semente = 0xEEEEEEEE;
+    for (var i = 0; i < dados.Length; i++)
+    {
+        semente += TabelaTeste()[0x400 + (chave & 0xFF)];
+        var original = dados[i];
+        dados[i] = original ^ (chave + semente);
+        chave = ((~chave << 0x15) + 0x11111111) | (chave >> 0x0B);
+        semente = original + semente + (semente << 5) + 3;
+    }
+}
+
+static uint[] TabelaTeste()
+{
+    var t = new uint[0x500];
+    uint s = 0x00100001;
+    for (uint i = 0; i < 0x100; i++)
+        for (uint j = 0; j < 5; j++)
+        {
+            s = (s * 125 + 3) % 0x2AAAAB; var a = (s & 0xFFFF) << 16;
+            s = (s * 125 + 3) % 0x2AAAAB; var b = s & 0xFFFF;
+            t[i + j * 0x100] = a | b;
+        }
+    return t;
+}
+
+Check("hash do MPQ trata / e \\ igual",
+      MpqArchive.Hash(@"Interface\Icons\x.blp", 0) == MpqArchive.Hash("Interface/Icons/x.blp", 0));
+Check("hash do MPQ ignora caixa",
+      MpqArchive.Hash(@"INTERFACE\ICONS\X.BLP", 1) == MpqArchive.Hash(@"interface\icons\x.blp", 1));
+
+var tmpMpq = Path.Combine(Path.GetTempPath(), $"teste-{Guid.NewGuid():N}.MPQ");
+var conteudoIcone = System.Text.Encoding.ASCII.GetBytes(
+    string.Concat(Enumerable.Repeat("ICONE-DE-TESTE-", 40)));
+
+foreach (var comprimido in new[] { false, true })
+{
+    File.WriteAllBytes(tmpMpq, MontarMpq(@"Interface\Icons\INV_Sword_39.blp", conteudoIcone, comprimido));
+    var rotulo = comprimido ? "comprimido" : "cru";
+
+    using var mpq = MpqArchive.Open(tmpMpq);
+    var lido = mpq.Read(@"Interface\Icons\INV_Sword_39.blp");
+
+    Check($"MPQ {rotulo}: acha o arquivo", lido is not null);
+    Check($"MPQ {rotulo}: conteudo confere", lido is not null && lido.SequenceEqual(conteudoIcone));
+    Check($"MPQ {rotulo}: acha com barra normal",
+          mpq.Read("Interface/Icons/INV_Sword_39.blp") is not null);
+    Check($"MPQ {rotulo}: arquivo ausente devolve null",
+          mpq.Read(@"Interface\Icons\NaoExiste.blp") is null);
+}
+
+File.Delete(tmpMpq);
+
+var naoMpq = Path.Combine(Path.GetTempPath(), $"teste-{Guid.NewGuid():N}.bin");
+File.WriteAllBytes(naoMpq, new byte[600]);
+Check("arquivo que nao e MPQ e recusado", Throws(() => MpqArchive.Open(naoMpq).Dispose()));
+File.Delete(naoMpq);
+
+
+// ---- DBC e nomes de icone -------------------------------------------------
+static byte[] MontarDbc(int registros, int campos, (uint[] linha, string texto)[] dados)
+{
+    var strings = new MemoryStream();
+    strings.WriteByte(0);   // offset 0 = string vazia, como no formato real
+
+    var linhas = new List<uint[]>();
+    foreach (var (linha, texto) in dados)
+    {
+        var copia = (uint[])linha.Clone();
+        if (texto.Length > 0)
+        {
+            copia[^1] = (uint)strings.Length;
+            var bytes = System.Text.Encoding.UTF8.GetBytes(texto);
+            strings.Write(bytes);
+            strings.WriteByte(0);
+        }
+        linhas.Add(copia);
+    }
+
+    var corpoStrings = strings.ToArray();
+    var b = new byte[20 + registros * campos * 4 + corpoStrings.Length];
+    b[0] = (byte)'W'; b[1] = (byte)'D'; b[2] = (byte)'B'; b[3] = (byte)'C';
+    BitConverter.GetBytes((uint)registros).CopyTo(b, 4);
+    BitConverter.GetBytes((uint)campos).CopyTo(b, 8);
+    BitConverter.GetBytes((uint)(campos * 4)).CopyTo(b, 12);
+    BitConverter.GetBytes((uint)corpoStrings.Length).CopyTo(b, 16);
+
+    var p = 20;
+    foreach (var linha in linhas)
+        foreach (var v in linha) { BitConverter.GetBytes(v).CopyTo(b, p); p += 4; }
+
+    corpoStrings.CopyTo(b, p);
+    return b;
+}
+
+// 6 campos, o icone no campo 5 - o layout do ItemDisplayInfo do 3.3.5a
+var dbcPath = Path.Combine(Path.GetTempPath(), $"idi-{Guid.NewGuid():N}.dbc");
+File.WriteAllBytes(dbcPath, MontarDbc(3, 6, new (uint[], string)[]
+{
+    (new uint[] { 100, 0, 0, 0, 0, 0 }, "INV_Sword_39"),
+    (new uint[] { 200, 0, 0, 0, 0, 0 }, "Spell_Holy_Heal"),
+    (new uint[] { 300, 0, 0, 0, 0, 0 }, "INV_Misc_Bag_08"),
+}));
+
+var icones = IconExtractor.ReadIconNames(dbcPath);
+Check("DBC: le todos os registros", icones.Count == 3, icones.Count.ToString());
+Check("DBC: mapeia displayid para icone", icones[100] == "INV_Sword_39", icones.GetValueOrDefault(100u, "?"));
+Check("DBC: le o ultimo registro", icones[300] == "INV_Misc_Bag_08");
+
+var tabela = DbcFile.Read(dbcPath);
+Check("DBC: acha o campo do icone sozinho",
+      IconExtractor.DescobrirCampoDoIcone(tabela) == 5,
+      IconExtractor.DescobrirCampoDoIcone(tabela).ToString());
+File.Delete(dbcPath);
+
+Check("DBC invalido e recusado", Throws(() =>
+{
+    var ruim = Path.Combine(Path.GetTempPath(), $"ruim-{Guid.NewGuid():N}.dbc");
+    File.WriteAllBytes(ruim, new byte[] { 1, 2, 3, 4, 5 });
+    try { DbcFile.Read(ruim); } finally { File.Delete(ruim); }
+}));
+
+Check("nome de icone plausivel", IconExtractor.ParecemNomeDeIcone("INV_Sword_39"));
+Check("caminho nao e nome de icone", !IconExtractor.ParecemNomeDeIcone(@"Interface\Icons\x"));
+Check("com extensao nao e nome de icone", !IconExtractor.ParecemNomeDeIcone("x.blp"));
+Check("vazio nao e nome de icone", !IconExtractor.ParecemNomeDeIcone(""));
+
+Check("monta o caminho dentro do MPQ",
+      IconExtractor.CaminhoNoMpq("INV_Sword_39") == @"Interface\Icons\INV_Sword_39.blp");
+
+// Os patches tem que ser consultados antes dos arquivos base: eles substituem.
+var clienteFalso = Path.Combine(Path.GetTempPath(), $"cli-{Guid.NewGuid():N}");
+Directory.CreateDirectory(Path.Combine(clienteFalso, "Data", "ptBR"));
+foreach (var n in new[] { "common.MPQ", "common-2.MPQ", "patch.MPQ", "patch-3.MPQ" })
+    File.WriteAllBytes(Path.Combine(clienteFalso, "Data", n), new byte[16]);
+File.WriteAllBytes(Path.Combine(clienteFalso, "Data", "ptBR", "patch-ptBR-2.MPQ"), new byte[16]);
+
+var ordem = IconExtractor.ListarMpqs(clienteFalso).Select(Path.GetFileName).ToList();
+Check("acha os MPQ da raiz e do idioma", ordem.Count == 5, string.Join(", ", ordem));
+Check("patches vem antes dos arquivos base",
+      ordem.TakeWhile(n => n!.StartsWith("patch", StringComparison.OrdinalIgnoreCase)).Count() == 3,
+      string.Join(", ", ordem));
+Check("patch-3 consultado antes de patch",
+      ordem.IndexOf("patch-3.MPQ") < ordem.IndexOf("patch.MPQ"), string.Join(", ", ordem));
+Check("le o numero do patch",
+      IconExtractor.NumeroDoPatch("patch-3.MPQ") == 3
+      && IconExtractor.NumeroDoPatch("patch-ptBR-2.MPQ") == 2
+      && IconExtractor.NumeroDoPatch("patch.MPQ") == 0
+      && IconExtractor.NumeroDoPatch("common.MPQ") == 0);
+Directory.Delete(clienteFalso, true);
+
+Check("client sem pasta Data devolve lista vazia",
+      IconExtractor.ListarMpqs(Path.Combine(Path.GetTempPath(), "nao-existe-" + Guid.NewGuid())).Count == 0);
+
+
+
+// ---- ponta a ponta: MPQ -> BLP -> PNG -------------------------------------
+// O caminho inteiro, com os mesmos formatos reais: um BLP DXT1 guardado dentro
+// de um MPQ comprimido, extraido e convertido. Se qualquer elo estiver errado,
+// isto quebra.
+var clienteE2E = Path.Combine(Path.GetTempPath(), $"e2e-{Guid.NewGuid():N}");
+Directory.CreateDirectory(Path.Combine(clienteE2E, "Data"));
+
+var blocoDxt = new byte[8];
+BitConverter.GetBytes((ushort)0xF800).CopyTo(blocoDxt, 0);   // c0 = vermelho puro
+BitConverter.GetBytes((ushort)0x0000).CopyTo(blocoDxt, 2);
+BitConverter.GetBytes((uint)0).CopyTo(blocoDxt, 4);
+var iconeBlp = MontarBlp(2, 0, 0, 4, 4, blocoDxt);
+
+File.WriteAllBytes(
+    Path.Combine(clienteE2E, "Data", "patch-3.MPQ"),
+    MontarMpq(@"Interface\Icons\INV_Sword_39.blp", iconeBlp, comprimir: true));
+
+var saidaIcones = Path.Combine(clienteE2E, "icons");
+var res = IconExtractor.Extract(clienteE2E, saidaIcones, new[] { "INV_Sword_39", "NaoExiste_99" });
+
+Check("extraiu o icone que existe", res.Extraidos == 1, $"{res.Extraidos}");
+Check("contou o que nao existe", res.NaoAchados == 1, $"{res.NaoAchados}");
+Check("nenhuma falha de decodificacao", res.Falharam == 0, $"{res.Falharam}");
+
+var pngGerado = Path.Combine(saidaIcones, "INV_Sword_39.png");
+Check("gravou o PNG", File.Exists(pngGerado));
+
+var bytesPng = File.ReadAllBytes(pngGerado);
+Check("PNG valido na saida",
+      bytesPng[0] == 0x89 && bytesPng[1] == (byte)'P' && bytesPng[2] == (byte)'N');
+
+// a cor tem que ter sobrevivido a compressao do MPQ e ao DXT
+var decodificado = BlpImage.Decode(iconeBlp);
+Check("vermelho puro atravessa o caminho todo",
+      decodificado.Bgra[2] == 255 && decodificado.Bgra[1] == 0 && decodificado.Bgra[0] == 0,
+      $"B={decodificado.Bgra[0]} G={decodificado.Bgra[1]} R={decodificado.Bgra[2]}");
+
+// segunda passada nao refaz o que ja existe
+var res2 = IconExtractor.Extract(clienteE2E, saidaIcones, new[] { "INV_Sword_39" });
+Check("nao reextrai o que ja esta em disco", res2.JaExistiam == 1 && res2.Extraidos == 0,
+      $"ja={res2.JaExistiam} novos={res2.Extraidos}");
+
+// progresso e chamado uma vez por icone
+var vistos = new List<string>();
+IconExtractor.Extract(clienteE2E, saidaIcones, new[] { "A", "B", "C" },
+                      (feitos, totalIcones, nome) => vistos.Add($"{feitos}/{totalIcones} {nome}"));
+Check("progresso reportado por icone", vistos.Count == 3, string.Join(" | ", vistos));
+Check("progresso conta certo", vistos[2] == "3/3 C", string.Join(" | ", vistos));
+
+Check("client sem MPQ levanta erro claro", Throws(() =>
+    IconExtractor.Extract(Path.Combine(Path.GetTempPath(), "vazio-" + Guid.NewGuid()),
+                          saidaIcones, new[] { "X" })));
+
+Directory.Delete(clienteE2E, true);
+
 
 Console.WriteLine($"\n{total - falhas}/{total} testes passaram (final)");
 return falhas == 0 ? 0 : 1;

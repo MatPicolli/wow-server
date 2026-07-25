@@ -73,6 +73,8 @@
                     <TextBlock x:Name="TxtResumo" DockPanel.Dock="Left" VerticalAlignment="Center"
                                FontSize="12" Foreground="{StaticResource TextDim}" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Extrair ícones" Padding="8,3" FontSize="11" Click="ExtrairIcones_Click"
+                                ToolTip="Lê os ícones dos MPQ do seu WoW e grava como PNG. Roda uma vez só." />
                         <Button Content="Marcar todos" Padding="8,3" FontSize="11" Click="MarcarTodos_Click" />
                         <Button Content="Desmarcar" Padding="8,3" FontSize="11" Click="Desmarcar_Click" />
                     </StackPanel>
@@ -98,9 +100,15 @@
                                             Margin="0,0,8,0" BorderThickness="2"
                                             BorderBrush="{Binding CorQualidade}"
                                             Background="{StaticResource BgConsole}">
-                                        <TextBlock Text="{Binding Inicial}" FontSize="12" FontWeight="Bold"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   Foreground="{Binding CorQualidade}" />
+                                        <Grid>
+                                            <Image Source="{Binding Icone}" Width="22" Height="22"
+                                                   Visibility="{Binding VisibilidadeIcone}"
+                                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                                            <TextBlock Text="{Binding Inicial}" FontSize="12" FontWeight="Bold"
+                                                       Visibility="{Binding VisibilidadeLetra}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Foreground="{Binding CorQualidade}" />
+                                        </Grid>
                                     </Border>
 
                                     <TextBlock DockPanel.Dock="Right" Text="{Binding NivelTexto}"

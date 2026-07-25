@@ -21,7 +21,8 @@ public sealed record ItemRow(
     int SellPrice,
     int MaxStack,
     IReadOnlyList<(int Type, int Value)> Stats,
-    string Description);
+    string Description,
+    int DisplayId);
 
 /// <summary>Filtros da busca de itens.</summary>
 public sealed record ItemFilter
@@ -167,7 +168,7 @@ public static class ItemBrowser
             "SELECT entry, name, class, subclass, Quality, InventoryType, ItemLevel, RequiredLevel, "
             + "bonding, armor, dmg_min1, dmg_max1, delay, MaxDurability, SellPrice, stackable, "
             + "stat_type1, stat_value1, stat_type2, stat_value2, stat_type3, stat_value3, "
-            + "stat_type4, stat_value4, stat_type5, stat_value5, description "
+            + "stat_type4, stat_value4, stat_type5, stat_value5, description, displayid "
             + $"FROM `{worldDb}`.item_template {filtroSql} "
             + $"ORDER BY Quality DESC, ItemLevel DESC, entry ASC LIMIT {limite};";
     }
@@ -192,7 +193,7 @@ public static class ItemBrowser
         if (string.IsNullOrWhiteSpace(linha)) return null;
 
         var campos = linha.Split('\t');
-        if (campos.Length < 27) return null;
+        if (campos.Length < 28) return null;
         if (!int.TryParse(campos[0], out var entry)) return null;
 
         int I(int i) => int.TryParse(campos[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
@@ -211,7 +212,8 @@ public static class ItemBrowser
         return new ItemRow(
             entry, campos[1], I(2), I(3), I(4), I(5), I(6), I(7), I(8), I(9),
             D(10), D(11), I(12), I(13), I(14), I(15), stats,
-            campos.Length > 26 ? campos[26] : "");
+            campos.Length > 26 ? campos[26] : "",
+            I(27));
     }
 
     /// <summary>Ouro/prata/cobre a partir do valor em cobre.</summary>

@@ -208,10 +208,17 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   the console has no character and no position. `send items` is `Console::Yes`,
   which is why the heirloom kit goes by mail: max 12 items per letter
   (`MAX_MAIL_ITEMS`).
-- Item icons are **not** available: they are BLP files inside the client's MPQ
-  archives, and the pipeline extracts only dbc/maps/vmaps/mmaps. Showing them
-  would need an MPQ reader plus a BLP decoder. The item list uses a
-  quality-coloured square instead.
+- Item icons work through `MpqArchive` + `BlpImage` (both in Core, both written
+  here): `item_template.displayid` → `ItemDisplayInfo.dbc` → icon name →
+  `Interface\Icons\NAME.blp` inside an MPQ → PNG in `Data\icons`. The DBC is
+  already on disk — `map_extractor` copies **every** `.dbc`. Only the BLP needed
+  a reader. `MpqArchive` handles uncompressed and zlib sectors and refuses
+  PKWARE/encrypted loudly rather than returning wrong bytes.
+- MPQ header v1 offsets: 14 = sectorSizeShift(u16), 16 = hashTablePos,
+  20 = blockTablePos, 24 = hashTableSize, 28 = blockTableSize. Getting these
+  wrong reads past the 32-byte header and throws in `BitConverter`.
+- MPQ load order cannot be alphabetical: `patch.MPQ` sorts *after* `patch-3.MPQ`
+  because `.` > `-`. Rank by the trailing patch number, highest first.
 - Item tooltips are built from `item_template` alone. "Use: ..." effects are
   deliberately missing — that text lives in `Spell.dbc`, not the database.
 - Heirlooms are `item_template.Quality = 7` (`ITEM_QUALITY_HEIRLOOM`). Query for
