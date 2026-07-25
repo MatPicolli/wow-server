@@ -100,7 +100,10 @@
             <GroupBox Header="Compilação e extração">
                 <StackPanel>
                     <TextBlock Text="Threads (0 = todos os núcleos)" Margin="0,0,0,4" />
-                    <TextBox x:Name="TxtThreads" Margin="0,0,0,10" />
+                    <TextBox x:Name="TxtThreads" Margin="0,0,0,4" />
+                    <TextBlock Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap"
+                               Margin="0,0,0,12"
+                               Text="Cada thread vira um processo do compilador consumindo 500–800 MB. Com 12 núcleos são uns 7 GB de RAM durante a compilação — é esperado, e some quando termina. Se a máquina ficar inutilizável enquanto compila, use metade dos núcleos: leva mais tempo, mas sobra memória para o resto." />
                     <CheckBox x:Name="ChkVmaps" Content="Extrair vmaps (linha de visão — sem isso mobs enxergam através de parede)" />
                     <CheckBox x:Name="ChkMmaps" Content="Extrair mmaps (navegação — sem isso mobs andam em linha reta)" />
                 </StackPanel>
