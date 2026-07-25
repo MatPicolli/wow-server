@@ -18,10 +18,14 @@ param(
     [string]$BoostVersion = '1.86.0',
 
     # O AzerothCore linka contra libcrypto-3-x64.dll / libssl-3-x64.dll, entao
-    # tem que ser 3.x. O pacote do winget instala 4.x por padrao; por isso a
-    # versao vem fixada aqui. Liste as disponiveis com:
+    # tem que ser 3.x - o pacote do winget instala 4.x por padrao.
+    #
+    # Sao varios candidatos porque o slproweb remove instaladores antigos do ar
+    # enquanto as manifests do winget continuam apontando pra eles: pedir uma
+    # versao especifica costuma dar 404. Tentamos da mais nova pra mais antiga
+    # ate uma baixar. Pra ver o que o winget conhece hoje:
     #   winget show --id ShiningLight.OpenSSL.Dev --versions
-    [string]$OpenSslVersion = '3.6.2'
+    [string[]]$OpenSslVersions = @('3.6.2', '3.6.1', '3.6.0', '3.5.4')
 )
 
 . "$PSScriptRoot\lib\common.ps1"
@@ -145,7 +149,12 @@ if ($sslDir -and (Test-Path (Join-Path $sslDir 'bin\libcrypto-3-x64.dll'))) {
     $needsSsl = $false
 } elseif ($sslDir) {
     Write-Warn "Achei OpenSSL em '$sslDir' mas sem libcrypto-3-x64.dll - provavelmente e a 4.x."
-    Write-Warn "O AzerothCore linka contra a 3.x. Desinstale e instale a linha LTS 3.x."
+    Write-Warn "O AzerothCore linka contra a 3.x."
+}
+
+function Test-OpenSsl3Installed {
+    $d = Find-OpenSslDir
+    return ($d -and (Test-Path (Join-Path $d 'bin\libcrypto-3-x64.dll')))
 }
 
 if ($needsSsl) {
@@ -157,27 +166,36 @@ if ($needsSsl) {
     }
 
     # Nao existe pacote 'ShiningLight.OpenSSL.LTS.Dev' - a linha LTS do winget
-    # so publica a variante Light, que vem sem os headers de desenvolvimento.
-    # E o ShiningLight.OpenSSL.Dev ja avancou pra 4.x, que o AzerothCore nao
-    # linka. Entao fixamos uma 3.x explicita.
-    Install-WingetPackage `
-        -Ids @('ShiningLight.OpenSSL.Dev') `
-        -Version $OpenSslVersion `
-        -SkipInstalledCheck `
-        -FriendlyName "OpenSSL $OpenSslVersion (dev, Win64)" `
-        -ManualUrl 'https://slproweb.com/products/Win32OpenSSL.html  (escolha "Win64 OpenSSL v3.x.x" - NAO a Light, NAO a 4.x)' | Out-Null
+    # so publica a variante Light, sem os headers de desenvolvimento. E o
+    # ShiningLight.OpenSSL.Dev ja avancou pra 4.x. Entao so resta pedir uma
+    # 3.x explicita, tentando varias porque o instalador de qualquer uma delas
+    # pode ja ter saido do ar no slproweb (o winget devolve 404 no download).
+    foreach ($v in $OpenSslVersions) {
+        Install-WingetPackage `
+            -Ids @('ShiningLight.OpenSSL.Dev') `
+            -Version $v `
+            -SkipInstalledCheck `
+            -FriendlyName "OpenSSL $v (dev, Win64)" | Out-Null
 
-    $sslDir = Find-OpenSslDir
-    if (-not $sslDir -or -not (Test-Path (Join-Path $sslDir 'bin\libcrypto-3-x64.dll'))) {
-        Write-Warn "A instalacao do OpenSSL nao gerou libcrypto-3-x64.dll."
-        Write-Warn "Se o winget disse que nao achou a versao $OpenSslVersion, ela pode ter saido do ar."
-        Write-Warn "Veja as versoes 3.x disponiveis com:"
-        Write-Warn "  winget show --id ShiningLight.OpenSSL.Dev --versions"
-        Write-Warn "e rode este script de novo com -OpenSslVersion <versao 3.x>,"
-        Write-Warn "ou baixe a 'Win64 OpenSSL v3.x.x' (nao Light) em https://slproweb.com/products/Win32OpenSSL.html"
-        Write-Warn "Na instalacao, escolha copiar as DLLs para 'The OpenSSL binaries (/bin) directory'."
+        if (Test-OpenSsl3Installed) { break }
+        Write-Info "  versao $v indisponivel, tentando a proxima..."
+    }
+
+    if (Test-OpenSsl3Installed) {
+        Write-Ok "OpenSSL 3.x em $(Find-OpenSslDir)"
     } else {
-        Write-Ok "OpenSSL 3.x em $sslDir"
+        Write-Host ''
+        Write-Warn "Nenhuma versao 3.x do OpenSSL pode ser instalada pelo winget."
+        Write-Warn "Isso e comum: o slproweb remove instaladores antigos e as manifests"
+        Write-Warn "do winget continuam apontando pra eles, dando 404 no download."
+        Write-Warn ""
+        Write-Warn "Instale na mao (uma vez so):"
+        Write-Warn "  1. abra https://slproweb.com/products/Win32OpenSSL.html"
+        Write-Warn "  2. baixe a 'Win64 OpenSSL v3.x.x' - NAO a Light, NAO a 4.x"
+        Write-Warn "  3. na instalacao, copie as DLLs para 'The OpenSSL binaries (/bin) directory'"
+        Write-Warn ""
+        Write-Warn "Depois confirme com:"
+        Write-Warn "  Test-Path 'C:\Program Files\OpenSSL-Win64\bin\libcrypto-3-x64.dll'"
     }
 }
 

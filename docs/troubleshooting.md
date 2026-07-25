@@ -27,32 +27,45 @@ linha **3.x**. Confira:
 Test-Path 'C:\Program Files\OpenSSL-Win64\bin\libcrypto-3-x64.dll'
 ```
 
-Se der `False`, troque pela 3.x (PowerShell como Administrador):
+Se der `False`, **instale na mão** — o winget quase sempre falha aqui:
+
+1. Abra <https://slproweb.com/products/Win32OpenSSL.html>
+2. Baixe a **"Win64 OpenSSL v3.x.x"** — a linha 3, **sem ser *Light***.
+   Ignore qualquer 4.x.
+3. Na instalação, quando perguntar onde copiar as DLLs, escolha
+   **"The OpenSSL binaries (/bin) directory"** — não o diretório de sistema.
+4. Confirme de novo com o `Test-Path` acima.
+
+Se preferir sem instalador, a FireDaemon publica builds do OpenSSL 3 em zip,
+com headers e libs:
+<https://kb.firedaemon.com/support/solutions/articles/4000121705>.
+Descompacte e passe `-DOPENSSL_ROOT_DIR=<pasta>` no CMake.
+
+### Por que o winget não resolve isso
+
+Três coisas se somam:
+
+- `ShiningLight.OpenSSL.Dev` já avançou pra **4.x**, que não tem as DLLs que o
+  AzerothCore linka.
+- **Não existe** `ShiningLight.OpenSSL.LTS.Dev`. A linha LTS do winget só
+  publica a variante *Light*, que vem sem os headers de desenvolvimento.
+- As manifests 3.x que sobraram (3.5.4, 3.6.0, 3.6.1, 3.6.2) apontam pra
+  instaladores que o slproweb **já removeu do ar** — pedir uma delas dá
+  `404` no meio do download:
+  ```
+  Downloading https://slproweb.com/download/Win64OpenSSL-3_6_2.msi
+  An unexpected error occurred while executing the command:
+  Download request status is not success.
+  0x80190194 : Não encontrado (404).
+  ```
+
+O `01-install-prereqs.ps1` tenta essas versões da mais nova pra mais antiga e,
+se todas derem 404, imprime o passo a passo manual. Se descobrir uma 3.x que
+ainda baixa, dá pra passar direto:
 
 ```powershell
-winget uninstall --id ShiningLight.OpenSSL.Dev --exact
-
-winget install --id ShiningLight.OpenSSL.Dev --exact --version 3.6.2 `
-    --accept-package-agreements --accept-source-agreements
+.\scripts\01-install-prereqs.ps1 -OpenSslVersions '3.6.1'
 ```
-
-Se o winget disser que não achou a 3.6.2 — o slproweb tira instaladores
-antigos do ar de vez em quando — veja quais ainda existem e escolha a 3.x mais
-alta:
-
-```powershell
-winget show --id ShiningLight.OpenSSL.Dev --versions
-```
-
-Última alternativa, na mão: baixe a **"Win64 OpenSSL v3.x.x"** (não a *Light*)
-em <https://slproweb.com/products/Win32OpenSSL.html>. Na instalação, escolha
-copiar as DLLs para **"The OpenSSL binaries (/bin) directory"**.
-
-> Por que o script erra sozinho: o pacote `ShiningLight.OpenSSL.Dev` do winget
-> já avançou pra 4.x, e não existe um `ShiningLight.OpenSSL.LTS.Dev` — a linha
-> LTS só publica a variante *Light*, sem os headers. Por isso o
-> `01-install-prereqs.ps1` fixa uma versão 3.x explícita, e você pode
-> sobrescrever com `-OpenSslVersion`.
 
 ### `cannot open input file 'libmysql.lib'`
 
