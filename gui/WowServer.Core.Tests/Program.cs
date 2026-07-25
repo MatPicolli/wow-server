@@ -164,5 +164,55 @@ Check("presets existem", TuningPresets.All.Count >= 3);
 Check("preset Blizzlike e neutro",
       TuningPresets.All[0].Gathering.IsEmpty && TuningPresets.All[0].Drops.IsEmpty);
 
-Console.WriteLine($"\n{total - falhas}/{total} testes passaram");
+// ---------------------------------------------------------------- tailer ---
+Console.WriteLine("\n=== LogTailer: leitura de log em uso ===");
+
+var tmp = Path.Combine(Path.GetTempPath(), $"tail-{Guid.NewGuid():N}.log");
+try
+{
+    // arquivo ja com conteudo antes do tailer comecar
+    File.WriteAllText(tmp, "linha antiga 1\nlinha antiga 2\n");
+
+    var recebidas = new List<string>();
+    using var tailer = new LogTailer(tmp, TimeSpan.FromMilliseconds(50));
+    tailer.Line += l => { lock (recebidas) recebidas.Add(l); };
+    tailer.Start(fromStart: true);
+
+    await Task.Delay(200);
+    lock (recebidas)
+        Check("le o que ja existia", recebidas.Count == 2, string.Join(" | ", recebidas));
+
+    // escreve com o arquivo aberto para escrita, como o servidor faz
+    using (var w = new FileStream(tmp, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+    using (var sw = new StreamWriter(w))
+    {
+        sw.WriteLine("linha nova 3");
+        sw.Flush();
+        await Task.Delay(200);
+        lock (recebidas)
+            Check("le linha nova com o arquivo aberto por outro processo",
+                  recebidas.Count == 3 && recebidas[2] == "linha nova 3",
+                  string.Join(" | ", recebidas));
+    }
+
+    // reinicio do servidor: appender abre em modo 'w' e trunca
+    File.WriteAllText(tmp, "apos reinicio\n");
+    await Task.Delay(200);
+    lock (recebidas)
+        Check("detecta truncamento e nao perde a linha seguinte",
+              recebidas.Contains("apos reinicio"), string.Join(" | ", recebidas));
+
+    var semArquivo = new LogTailer(Path.Combine(Path.GetTempPath(), "nao-existe.log"),
+                                   TimeSpan.FromMilliseconds(50));
+    semArquivo.Start();
+    await Task.Delay(150);
+    semArquivo.Dispose();
+    Check("nao explode se o arquivo ainda nao existe", true);
+}
+finally
+{
+    try { File.Delete(tmp); } catch { }
+}
+
+Console.WriteLine($"\n{total - falhas}/{total} testes passaram (final)");
 return falhas == 0 ? 0 : 1;

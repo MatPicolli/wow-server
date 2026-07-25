@@ -7,6 +7,7 @@ namespace WowServer.Gui.Views;
 public partial class ServerView : UserControl
 {
     private ServerController? _servidor;
+    private LogTailer? _authLog;
 
     public ServerView()
     {
@@ -47,6 +48,7 @@ public partial class ServerView : UserControl
 
             PainelAuth.SetState("iniciando", true);
             _servidor.StartAuth();
+            AcompanharLogDoAuth(cfg);
 
             // O worldserver so consegue registrar o realm depois que o
             // authserver esta ouvindo; um respiro evita erro de conexao no log.
@@ -64,6 +66,28 @@ public partial class ServerView : UserControl
             MessageBox.Show(ex.Message, "Não consegui iniciar");
             PainelWorld.Append($"[erro] {ex.Message}", OutputKind.Error);
         }
+    }
+
+    /// <summary>
+    /// O authserver escreve pouco e a saida fica presa no buffer do pipe (ver
+    /// LogTailer). O painel dele e alimentado pelo Auth.log, que nao sofre
+    /// disso e ainda traz o historico completo da sessao.
+    /// </summary>
+    private void AcompanharLogDoAuth(ServerSettings cfg)
+    {
+        _authLog?.Dispose();
+
+        var caminho = System.IO.Path.Combine(cfg.ServerDir, "logs", "Auth.log");
+
+        _authLog = new LogTailer(caminho);
+        _authLog.Line += linha => Dispatcher.Invoke(() =>
+        {
+            PainelAuth.Append(linha);
+            PainelAuth.SetState("rodando", true);
+        });
+        _authLog.Start(fromStart: true);
+
+        PainelAuth.Append($"[lendo {caminho}]");
     }
 
     private void AoReceberSaida(ServerOutput saida) => Dispatcher.Invoke(() =>

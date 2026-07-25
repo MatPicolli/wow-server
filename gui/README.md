@@ -71,6 +71,13 @@ o resto. Digite sem o ponto.
 personagens. "Forçar encerramento" mata o processo e perde o que não foi
 gravado — é para quando travar.
 
+**Painel do authserver.** Ele é alimentado pelo `Auth.log`, não pela saída do
+processo. Quando a saída padrão vai para um pipe em vez de um console, o
+runtime C troca buffer de linha por buffer de bloco (4 KB). O worldserver
+despeja tanta coisa que o buffer esvazia sozinho; o authserver escreve poucas
+linhas e elas ficariam presas indefinidamente. Ler o arquivo contorna isso e
+ainda traz o histórico completo da sessão.
+
 **Playerbots.** Aparece no catálogo com selo de aviso porque não é um módulo
 comum: exige substituir o core por um fork. A GUI explica o custo, troca o
 repositório no `settings.psd1` e reclona. Os dados extraídos do client e os
