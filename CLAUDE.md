@@ -37,6 +37,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\backup-db.ps1               # safe to run against a live server
 .\scripts\repair-settings.ps1         # recover a settings.psd1 with duplicate keys
 .\scripts\switch-core.ps1 -Playerbots # swap the core for a fork; preview, then -Apply
+.\scripts\remove-module.ps1 -Name mod-eluna   # preview, then -Apply
 ```
 
 Numbered scripts `00`–`08` are the install pipeline and are individually
@@ -224,6 +225,14 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 - `TextWrapping="Wrap"` inside a `ListBox` needs
   `ScrollViewer.HorizontalScrollBarVisibility="Disabled"` — that is what
   constrains the item to the viewport width.
+- Views are built before `Session.Current.Loaded` exists, so anything derived
+  from settings must be recomputed on `Loaded` **unconditionally**. Guarding
+  that refresh with `if (Session.Current.Loaded is null)` looks like an
+  optimisation and is a bug: another view's `Loaded` may have filled it in
+  first, and then the guard skips the redraw for the one case that needed it.
+  This is what hid the "Corrigir o core" button for three rounds. Views also
+  refresh on `IsVisibleChanged`, so state changed by a script outside the GUI
+  shows up on returning to the tab.
 
 ## Working conventions
 

@@ -100,6 +100,10 @@
                                                 IsEnabled="{Binding PodeInstalar}" />
                                         <Button Content="Abrir no navegador" Padding="10,4" FontSize="12"
                                                 Tag="{Binding Repositorio}" Click="Abrir_Click" />
+                                        <Button Content="Remover" Padding="10,4" FontSize="12"
+                                                Tag="{Binding Pasta}" Click="Remover_Click"
+                                                Visibility="{Binding VisibilidadeRemover}"
+                                                ToolTip="Apaga a pasta do módulo. Mostra o que vai apagar antes de confirmar." />
                                     </StackPanel>
                                 </StackPanel>
                             </Border>

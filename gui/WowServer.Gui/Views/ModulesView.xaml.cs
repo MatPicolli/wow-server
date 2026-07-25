@@ -12,6 +12,10 @@ public enum AcaoModulo { Instalar, CorrigirCore, Nenhuma }
 public sealed class ModuloItem
 {
     public required string Nome { get; init; }
+
+    /// <summary>Nome da pasta em modules/ — o que os scripts recebem.</summary>
+    public required string Pasta { get; init; }
+
     public required string Categoria { get; init; }
     public required string Resumo { get; init; }
     public required string Detalhes { get; init; }
@@ -23,7 +27,9 @@ public sealed class ModuloItem
     public required AcaoModulo Acao { get; init; }
     public string? Alerta { get; init; }
     public string? PassoManual { get; init; }
+    public required bool Instalado { get; init; }
 
+    public Visibility VisibilidadeRemover => Instalado ? Visibility.Visible : Visibility.Collapsed;
     public Visibility VisibilidadeAlerta => Alerta is null ? Visibility.Collapsed : Visibility.Visible;
     public Visibility VisibilidadePassoManual =>
         PassoManual is null ? Visibility.Collapsed : Visibility.Visible;
@@ -46,23 +52,40 @@ public partial class ModulesView : UserControl
 
         Recarregar();
 
-        // A deteccao de core incompativel depende das configuracoes; se esta
-        // tela abrir antes da de Configuracoes, elas ainda nao foram lidas.
-        Loaded += async (_, _) =>
+        // A deteccao de core incompativel depende das configuracoes, que no
+        // construtor quase nunca estao lidas ainda.
+        //
+        // A versao anterior so redesenhava se Session.Current.Loaded fosse
+        // null - e isso errava justamente quando OUTRA tela (a de
+        // Configuracoes) ja tinha carregado: encontrando o valor preenchido,
+        // esta aqui pulava o redesenho e mantinha na tela os cards montados
+        // sem configuracao nenhuma. O Playerbots aparecia como "instalado" em
+        // vez de "core incompativel", e o botao de corrigir nunca surgia.
+        Loaded += async (_, _) => await AtualizarComConfiguracoesAsync();
+
+        // Voltar para esta aba tem que refletir o que mudou fora dela - trocar
+        // o core pelo script, por exemplo, ou instalar um modulo pelo git.
+        IsVisibleChanged += async (_, e) =>
         {
-            if (Session.Current.Loaded is null)
-            {
-                try
-                {
-                    Session.Current.Loaded = await Session.Current.Settings.LoadAsync();
-                    Recarregar();
-                }
-                catch (Exception ex)
-                {
-                    Saida.Append($"[aviso] não consegui ler as configurações: {ex.Message}");
-                }
-            }
+            if (e.NewValue is true) await AtualizarComConfiguracoesAsync();
         };
+    }
+
+    private async Task AtualizarComConfiguracoesAsync()
+    {
+        if (Session.Current.Loaded is null)
+        {
+            try
+            {
+                Session.Current.Loaded = await Session.Current.Settings.LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                Saida.Append($"[aviso] não consegui ler as configurações: {ex.Message}");
+            }
+        }
+
+        Recarregar();
     }
 
     private string ModulesDir
@@ -105,7 +128,12 @@ public partial class ModulesView : UserControl
                 _ => ("oficial", (Brush)res["Accent"]),
             };
 
+            // Sem configuracoes nao da para saber se o core serve. Dizer
+            // "instalado" nesse caso seria afirmar algo que nao foi verificado.
+            var semConfig = instalado && m.Status == ModuleStatus.ExigeFork && cfg is null;
+
             if (instalado) (selo, cor) = ("instalado", (Brush)res["Ok"]);
+            if (semConfig) (selo, cor) = ("core não verificado", (Brush)res["Warn"]);
             if (coreErrado) (selo, cor) = ("core incompatível", (Brush)res["Err"]);
 
             var acao = coreErrado ? AcaoModulo.CorrigirCore
@@ -115,6 +143,8 @@ public partial class ModulesView : UserControl
             itens.Add(new ModuloItem
             {
                 Nome = m.DisplayName,
+                Pasta = m.Name,
+                Instalado = instalado,
                 Categoria = m.Category,
                 Resumo = m.Summary,
                 Detalhes = m.Details,
@@ -145,6 +175,8 @@ public partial class ModulesView : UserControl
             itens.Add(new ModuloItem
             {
                 Nome = nome,
+                Pasta = nome,
+                Instalado = true,
                 Categoria = ModuleCatalog.OutrosCategoria,
                 Resumo = "Instalado por URL, fora do catálogo.",
                 Detalhes = "Este módulo não faz parte da lista curada, então não há "
@@ -361,6 +393,62 @@ public partial class ModulesView : UserControl
         Saida.Append("");
         Saida.Append("==> agora use 'Recompilar' para o módulo entrar no servidor");
         Saida.Append("    leia o README do repositório: muitos módulos precisam de ajuste no .conf");
+    }
+
+    /// <summary>
+    /// Remove um modulo instalado.
+    ///
+    /// Roda o script duas vezes de proposito: a primeira sem -Apply, so para
+    /// mostrar no console o que sera apagado, e so entao pergunta. Assim a
+    /// confirmacao vem depois de ver o tamanho da pasta e se ha trabalho local
+    /// nao commitado, em vez de antes.
+    /// </summary>
+    private async void Remover_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string pasta } || string.IsNullOrWhiteSpace(pasta)) return;
+
+        if (!_runner.ScriptExists("remove-module.ps1"))
+        {
+            Saida.Append("[erro] scripts\\remove-module.ps1 não encontrado — atualize o repositório", OutputKind.Error);
+            return;
+        }
+
+        Saida.Append($"==> o que aconteceria ao remover {pasta}");
+        var previa = await _runner.RunAsync("remove-module.ps1", new[] { "-Name", pasta });
+
+        // Saida != 0 aqui e o script recusando (alteracoes locais, por
+        // exemplo). O motivo ja esta no console; perguntar depois disso seria
+        // oferecer algo que vai falhar.
+        if (previa != 0)
+        {
+            MessageBox.Show(
+                $"Não dá para remover '{pasta}' assim — o motivo está no console ao lado.",
+                "Remoção recusada");
+            return;
+        }
+
+        var resposta = MessageBox.Show(
+            $"Apagar a pasta do módulo '{pasta}'?\n\n"
+            + "O console ao lado mostra exatamente o que será apagado.\n\n"
+            + "O que NÃO é desfeito: o SQL que o módulo já aplicou no banco. "
+            + "Na prática isso raramente incomoda — sobram tabelas sem uso.\n\n"
+            + "Depois disso, use Recompilar para o servidor deixar de incluí-lo.",
+            "Remover módulo", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+        if (resposta != MessageBoxResult.Yes)
+        {
+            Saida.Append("    remoção cancelada");
+            return;
+        }
+
+        var codigo = await _runner.RunAsync("remove-module.ps1", new[] { "-Name", pasta, "-Apply" });
+        if (codigo != 0)
+        {
+            Saida.Append($"[erro] a remoção falhou (código {codigo})", OutputKind.Error);
+            return;
+        }
+
+        Recarregar();
     }
 
     private async void Instalar_Click(object sender, RoutedEventArgs e)
