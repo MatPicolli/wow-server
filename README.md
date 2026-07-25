@@ -53,13 +53,21 @@ O resto tem padrões que funcionam.
 
 > `settings.psd1` está no `.gitignore` porque guarda senhas.
 
-### 2. Libere a execução de scripts
+### 2. Libere a execução de scripts (só se precisar)
 
-O PowerShell bloqueia scripts por padrão. Nesta sessão:
+Se você clonou com `git clone`, provavelmente **não precisa disso** — a
+política padrão (`RemoteSigned`) só bloqueia script baixado da internet, e
+arquivos vindos do git não carregam essa marca.
+
+Se der "a execução de scripts foi desabilitada neste sistema", libere só
+nesta janela:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -Bypass
+Set-ExecutionPolicy Bypass -Scope Process
 ```
+
+> `Bypass` é o **valor** do `-ExecutionPolicy`, não um switch —
+> `-Scope Process -Bypass` dá erro de parâmetro.
 
 ### 3. Instale as dependências
 

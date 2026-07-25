@@ -204,10 +204,25 @@ Tem que terminar em `12340`.
 ### "a execução de scripts foi desabilitada neste sistema"
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -Bypass
+Set-ExecutionPolicy Bypass -Scope Process
 ```
 
 Vale só pra janela atual — é o suficiente e não mexe na política da máquina.
+
+Note que `Bypass` é o **valor** do parâmetro `-ExecutionPolicy`, e não um
+switch. Escrever `-Scope Process -Bypass` devolve *"Não é possível localizar
+um parâmetro que coincida com o nome de parâmetro 'Bypass'"*.
+
+Se você clonou o repo com `git clone`, normalmente nem precisa: a política
+padrão `RemoteSigned` só barra script **baixado da internet** e não assinado.
+Arquivos que vieram do git não têm a marca de origem (mark-of-the-web) que o
+navegador ou o `Invoke-WebRequest` colocam, então rodam direto. Quem baixa o
+`.zip` pelo GitHub, sim, esbarra no bloqueio — nesse caso dá pra liberar
+arquivo por arquivo com `Unblock-File`:
+
+```powershell
+Get-ChildItem -Recurse -Filter *.ps1 | Unblock-File
+```
 
 ### `Import-PowerShellDataFile : não é reconhecido`
 
