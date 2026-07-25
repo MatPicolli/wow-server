@@ -352,7 +352,21 @@ function Invoke-MySql {
 }
 
 function Read-MySqlRootPassword {
-    $sec = Read-Host "Senha do usuario root do MySQL" -AsSecureString
+    <#
+        A senha do root nao fica salva em lugar nenhum - e pedida na hora.
+
+        Isso so funciona num console de verdade. A GUI roda os scripts com
+        -NonInteractive, onde o Read-Host lanca uma excecao cuja mensagem nao
+        diz o que fazer. Traduzir esse caso e o motivo do try/catch.
+    #>
+    $sec = $null
+    try {
+        $sec = Read-Host 'Senha do usuario root do MySQL' -AsSecureString
+    } catch {
+        Write-Fail 'nao da para perguntar a senha do root aqui: este PowerShell esta em modo nao-interativo.' `
+                   'Rode .\scripts\04-setup-database.ps1 direto numa janela do PowerShell, onde da para digitar. Pela GUI, esta etapa abre a propria janela.'
+    }
+
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
     try   { return [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }

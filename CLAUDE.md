@@ -139,6 +139,13 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 
 **Process handling**
 
+- The GUI runs scripts with `-NonInteractive`, so `Read-Host` throws. The
+  database step asks for the MySQL root password, which is deliberately never
+  stored — steps flagged `RequiresInput` open a real console window instead.
+- Launching that window with `-NoExit` loses the script's exit code: what comes
+  back is the code from closing the window, so a wrong password reads as
+  success. Wrap the call in `-Command` and `exit $LASTEXITCODE` instead.
+
 - `Start-Process -PassThru` returns a `Process` whose `ExitCode` reads back as
   `$null` on Windows unless `.Handle` is touched once after starting.
 - `CloseMainWindow()` does nothing for a process started with

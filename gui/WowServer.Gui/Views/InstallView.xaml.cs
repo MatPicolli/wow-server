@@ -140,9 +140,9 @@ public partial class InstallView : UserControl
                 int codigo;
                 try
                 {
-                    if (passo.RequiresAdmin)
+                    if (passo.RequiresAdmin || passo.RequiresInput)
                     {
-                        codigo = await RodarElevadoAsync(passo);
+                        codigo = await RodarEmJanelaPropriaAsync(passo);
                     }
                     else
                     {
@@ -207,27 +207,61 @@ public partial class InstallView : UserControl
     }
 
     /// <summary>
-    /// A instalacao de dependencias precisa de administrador. Em vez de rodar
-    /// a GUI inteira elevada, sobe so este processo com 'runas' - o Windows
-    /// pede a confirmacao ao usuario.
+    /// Roda uma etapa numa janela de console propria, em vez de com a saida
+    /// redirecionada para o painel.
     ///
-    /// Efeito colateral: processo elevado nao aceita saida redirecionada, entao
-    /// esta etapa abre a propria janela e aqui so sabemos o codigo de saida.
+    /// Dois motivos levam a isso, e os dois impedem o caminho normal:
+    ///
+    ///   RequiresAdmin - processo elevado nao aceita saida redirecionada. Em vez
+    ///   de rodar a GUI inteira como administrador, so este processo sobe com
+    ///   'runas' e o Windows pede a confirmacao.
+    ///
+    ///   RequiresInput - a etapa pergunta algo. O ScriptRunner usa
+    ///   -NonInteractive, onde Read-Host lanca excecao; a etapa do banco pede a
+    ///   senha do root do MySQL, que de proposito nao fica salva em lugar nenhum.
+    ///
+    /// Em ambos os casos o painel so recebe o codigo de saida.
     /// </summary>
-    private async Task<int> RodarElevadoAsync(InstallStep passo)
+    private async Task<int> RodarEmJanelaPropriaAsync(InstallStep passo)
     {
-        Saida.Append("    esta etapa abre uma janela separada, com privilégio de administrador");
+        if (passo.RequiresAdmin)
+        {
+            Saida.Append("    esta etapa abre uma janela separada, com privilégio de administrador");
+        }
+        else
+        {
+            Saida.Append("    esta etapa abre uma janela separada porque precisa que você digite algo");
+            Saida.Append("    (a senha do root do MySQL — ela não fica salva em lugar nenhum)");
+        }
         Saida.Append("    acompanhe o progresso por lá; ao fechar, o resultado aparece aqui");
 
         var script = System.IO.Path.Combine(_runner.ScriptsDir, passo.Script);
+
+        // -NoExit deixaria a janela aberta e o codigo de saida seria o de fechar
+        // a janela, nao o do script: uma senha errada voltaria como sucesso.
+        // Entao o script roda dentro de -Command, a janela espera um Enter para
+        // o usuario ler o que aconteceu, e o codigo original e devolvido.
+        var caminho = script.Replace("'", "''");
+        var comando =
+            $"& '{caminho}'; "
+            + "$c = $LASTEXITCODE; "
+            + "if ($null -eq $c) { $c = 0 }; "
+            + "Write-Host ''; "
+            + "if ($c -ne 0) { Write-Host '=== a etapa FALHOU - leia a mensagem acima ===' -ForegroundColor Red }; "
+            + "Read-Host 'Pressione Enter para fechar esta janela' | Out-Null; "
+            + "exit $c";
+
         var psi = new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -NoExit -File \"{script}\"",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{comando}\"",
             WorkingDirectory = Session.Current.RepoRoot,
             UseShellExecute = true,
-            Verb = "runas",
         };
+
+        // 'runas' so quando e mesmo necessario: pedir UAC para digitar uma senha
+        // de banco seria pedir privilegio a toa.
+        if (passo.RequiresAdmin) psi.Verb = "runas";
 
         try
         {

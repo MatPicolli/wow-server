@@ -7,7 +7,15 @@ public sealed record InstallStep(
     string Script,
     string[] Arguments,
     string Duration,
-    bool RequiresAdmin = false);
+    bool RequiresAdmin = false,
+
+    /// <summary>
+    /// A etapa pergunta algo no console e por isso precisa de uma janela de
+    /// verdade. A GUI roda os scripts com -NonInteractive e saida redirecionada,
+    /// onde Read-Host nao funciona - a etapa do banco pede a senha do root, que
+    /// de proposito nao fica salva em lugar nenhum.
+    /// </summary>
+    bool RequiresInput = false);
 
 /// <summary>
 /// A instalacao completa, na ordem. A GUI mostra isso como uma lista de
@@ -52,9 +60,10 @@ public static class InstallPlan
             "database",
             "5. Banco de dados",
             "Cria o usuario e os tres bancos. Ficam vazios: o servidor os "
-            + "popula sozinho no primeiro start.",
+            + "popula sozinho no primeiro start. Abre uma janela para voce "
+            + "digitar a senha do root do MySQL, que nao fica salva.",
             "04-setup-database.ps1", Array.Empty<string>(),
-            "1 min"),
+            "1 min", RequiresInput: true),
 
         new InstallStep(
             "extract",
