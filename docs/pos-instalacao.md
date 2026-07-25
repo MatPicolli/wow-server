@@ -197,7 +197,7 @@ tabelas de loot do banco `acore_world`. Tem um script pra isso:
 # aplicar
 .\scripts\tune-professions.ps1 -Mining 3 -Herbalism 3 -Apply
 
-# tudo (mineração, herbalismo, pesca, esfolamento) em dobro
+# tudo em dobro
 .\scripts\tune-professions.ps1 -All 2 -Apply
 
 # voltar ao original
@@ -206,12 +206,22 @@ tabelas de loot do banco `acore_world`. Tem um script pra isso:
 
 Com `-Mining 3`, um veio de cobre que dava 2–4 passa a dar 6–12.
 
-Depois de aplicar, recarregue sem reiniciar — no console do worldserver:
+| Parâmetro | Tabela | O que muda |
+|---|---|---|
+| `-Mining` | `gameobject_loot_template` (itens 7/7) | minério e pedra por nódulo |
+| `-Herbalism` | `gameobject_loot_template` (itens 7/9) | ervas por nódulo |
+| `-Fishing` | `fishing_loot_template` | peixes por fisgada |
+| `-Skinning` | `skinning_loot_template` | couro por esfolamento |
+| `-Disenchanting` | `disenchant_loot_template` | pó, essências e fragmentos |
+| `-Milling` | `milling_loot_template` | pigmentos por moagem |
+| `-Prospecting` | `prospecting_loot_template` | gemas por prospecção |
+
+Depois de aplicar, recarregue sem reiniciar — o script diz quais tabelas
+recarregar no console do worldserver, por exemplo:
 
 ```
 reload gameobject_loot_template
-reload fishing_loot_template
-reload skinning_loot_template
+reload disenchant_loot_template
 ```
 
 **Por que ele não acumula:** os valores originais são copiados pra tabela
@@ -227,7 +237,28 @@ do zero.
 Mineração e herbalismo saem os dois de `gameobject_loot_template` (os nódulos
 são gameobjects do tipo baú); o script separa um do outro pela classe do item
 (7/7 = metal e pedra, 7/9 = erva). Baús comuns e o resto do loot não são
-tocados.
+tocados. As outras cinco têm tabela própria, então não precisam de filtro.
+
+### Velocidade de subir a profissão
+
+Quantidade é uma coisa; **ganho de perícia** é outra, e fica no
+`worldserver.conf`:
+
+```ini
+SkillGain.Gathering = 1    # mineração, herbalismo, esfolamento
+SkillGain.Crafting  = 1    # profissões de produção
+
+SkillChance.Orange = 100   # chance de subir por dificuldade da receita
+SkillChance.Yellow = 75
+SkillChance.Green  = 25
+SkillChance.Grey   = 0
+
+SkillChance.MiningSteps   = 0   # 0 = a chance não cai conforme você sobe
+SkillChance.SkinningSteps = 0
+```
+
+Subir `SkillGain.Gathering` para 5 faz cada coleta valer 5 pontos de perícia.
+Reiniciar o worldserver para valer.
 
 ### Ajustes sem módulo
 

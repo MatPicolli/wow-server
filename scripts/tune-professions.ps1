@@ -25,8 +25,17 @@
 .PARAMETER Skinning
     Multiplicador pro esfolamento (couros).
 
+.PARAMETER Disenchanting
+    Multiplicador pro desencantar (po, essencias, fragmentos).
+
+.PARAMETER Milling
+    Multiplicador pra moagem de ervas em pigmentos (Escrivania).
+
+.PARAMETER Prospecting
+    Multiplicador pra prospeccao de minerio em gemas (Joalheria).
+
 .PARAMETER All
-    Aplica o mesmo multiplicador nas quatro. Os individuais tem prioridade.
+    Aplica o mesmo multiplicador em todas. Os individuais tem prioridade.
 
 .PARAMETER Apply
     Grava de verdade. Sem isso, so preview.
@@ -50,10 +59,14 @@
     Volta ao normal.
 
 .NOTES
-    Depois de aplicar, recarregue sem reiniciar - no console do worldserver:
-        reload gameobject_loot_template
+    Depois de aplicar, recarregue sem reiniciar - no console do worldserver.
+    O script diz exatamente quais tabelas recarregar; sao estas:
+        reload gameobject_loot_template     (mineracao e herbalismo)
         reload fishing_loot_template
         reload skinning_loot_template
+        reload disenchant_loot_template
+        reload milling_loot_template
+        reload prospecting_loot_template
 #>
 [CmdletBinding()]
 param(
@@ -61,6 +74,11 @@ param(
     [double]$Herbalism = 0,
     [double]$Fishing   = 0,
     [double]$Skinning  = 0,
+
+    [double]$Disenchanting = 0,
+    [double]$Milling       = 0,
+    [double]$Prospecting   = 0,
+
     [double]$All       = 0,
 
     [switch]$Apply,
@@ -102,6 +120,23 @@ $professions = @(
         Name = 'Skinning';  Table = 'skinning_loot_template'
         Join = ''; Where = '1 = 1'
         Rate = $(if ($Skinning  -gt 0) { $Skinning }  else { $All })
+    }
+    # Estas tres transformam um item em materiais. Sao tabelas inteiras
+    # dedicadas a isso, entao nao precisam de filtro por classe de item.
+    [pscustomobject]@{
+        Name = 'Disenchanting'; Table = 'disenchant_loot_template'
+        Join = ''; Where = '1 = 1'
+        Rate = $(if ($Disenchanting -gt 0) { $Disenchanting } else { $All })
+    }
+    [pscustomobject]@{
+        Name = 'Milling';       Table = 'milling_loot_template'
+        Join = ''; Where = '1 = 1'
+        Rate = $(if ($Milling       -gt 0) { $Milling }       else { $All })
+    }
+    [pscustomobject]@{
+        Name = 'Prospecting';   Table = 'prospecting_loot_template'
+        Join = ''; Where = '1 = 1'
+        Rate = $(if ($Prospecting   -gt 0) { $Prospecting }   else { $All })
     }
 )
 
@@ -162,7 +197,9 @@ if ($Reset) {
         exit 0
     }
 
-    foreach ($table in @('gameobject_loot_template', 'fishing_loot_template', 'skinning_loot_template')) {
+    # derivado de $professions: acrescentar uma profissao nova nao pode deixar
+    # o -Reset para tras
+    foreach ($table in ($professions.Table | Sort-Object -Unique)) {
         Invoke-World -Sql @"
 UPDATE ``$table`` t
   JOIN ``$backup`` b ON b.LootTable = '$table' AND b.Entry = t.Entry AND b.Item = t.Item
@@ -174,7 +211,8 @@ UPDATE ``$table`` t
 
     Invoke-World -Sql "DROP TABLE ``$backup``;" | Out-Null
     Write-Ok 'backup descartado - tudo voltou ao original'
-    Write-Info 'no console do worldserver: reload gameobject_loot_template'
+    Write-Info 'no console do worldserver, recarregue as tabelas:'
+    foreach ($t in ($professions.Table | Sort-Object -Unique)) { Write-Info "  reload $t" }
     exit 0
 }
 
@@ -266,13 +304,15 @@ if (-not $Apply) {
     Repita o comando com -Apply pra valer.
 "@ -ForegroundColor Yellow
 } else {
+    # so as tabelas que realmente mudaram - nao adianta mandar recarregar
+    # milling se voce so mexeu em mineracao
+    $reloads = ($selected.Table | Sort-Object -Unique | ForEach-Object { "        reload $_" }) -join "`r`n"
+
     Write-Host @"
 
     Aplicado. Pra o servidor enxergar sem reiniciar, no console do worldserver:
 
-        reload gameobject_loot_template
-        reload fishing_loot_template
-        reload skinning_loot_template
+$reloads
 
     Pra voltar tudo ao original:
         .\scripts\tune-professions.ps1 -Reset -Apply
