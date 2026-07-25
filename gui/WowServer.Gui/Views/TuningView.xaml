@@ -33,25 +33,46 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Mineração" Margin="0,5" />
+                            <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,5">
+                                <TextBlock Text="Mineração" VerticalAlignment="Center" />
+                                <v:HelpIcon Chave="tune.multiplicador" />
+                            </StackPanel>
                             <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtMining" Text="1" Margin="0,3" />
 
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Herbalismo" Margin="0,5" />
+                            <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Margin="0,5">
+                                <TextBlock Text="Herbalismo" VerticalAlignment="Center" />
+                                <v:HelpIcon Chave="tune.multiplicador" />
+                            </StackPanel>
                             <TextBox   Grid.Row="1" Grid.Column="1" x:Name="TxtHerb" Text="1" Margin="0,3" />
 
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Pesca" Margin="0,5" />
+                            <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" Margin="0,5">
+                                <TextBlock Text="Pesca" VerticalAlignment="Center" />
+                                <v:HelpIcon Chave="tune.multiplicador" />
+                            </StackPanel>
                             <TextBox   Grid.Row="2" Grid.Column="1" x:Name="TxtFish" Text="1" Margin="0,3" />
 
-                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Esfolamento" Margin="0,5" />
+                            <StackPanel Grid.Row="3" Grid.Column="0" Orientation="Horizontal" Margin="0,5">
+                                <TextBlock Text="Esfolamento" VerticalAlignment="Center" />
+                                <v:HelpIcon Chave="tune.multiplicador" />
+                            </StackPanel>
                             <TextBox   Grid.Row="3" Grid.Column="1" x:Name="TxtSkin" Text="1" Margin="0,3" />
 
-                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Desencantar" Margin="0,5" />
+                            <StackPanel Grid.Row="4" Grid.Column="0" Orientation="Horizontal" Margin="0,5">
+                                <TextBlock Text="Desencantar" VerticalAlignment="Center" />
+                                <v:HelpIcon Chave="tune.multiplicador" />
+                            </StackPanel>
                             <TextBox   Grid.Row="4" Grid.Column="1" x:Name="TxtDisench" Text="1" Margin="0,3" />
 
-                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Moagem" Margin="0,5" />
+                            <StackPanel Grid.Row="5" Grid.Column="0" Orientation="Horizontal" Margin="0,5">
+                                <TextBlock Text="Moagem" VerticalAlignment="Center" />
+                                <v:HelpIcon Chave="tune.multiplicador" />
+                            </StackPanel>
                             <TextBox   Grid.Row="5" Grid.Column="1" x:Name="TxtMill" Text="1" Margin="0,3" />
 
-                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Prospecção" Margin="0,5" />
+                            <StackPanel Grid.Row="6" Grid.Column="0" Orientation="Horizontal" Margin="0,5">
+                                <TextBlock Text="Prospecção" VerticalAlignment="Center" />
+                                <v:HelpIcon Chave="tune.multiplicador" />
+                            </StackPanel>
                             <TextBox   Grid.Row="6" Grid.Column="1" x:Name="TxtProsp" Text="1" Margin="0,3" />
                         </Grid>
                         <TextBlock Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap"
@@ -71,10 +92,16 @@
                                 <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Itens de quest" Margin="0,5" />
+                            <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,5">
+                                <TextBlock Text="Itens de quest" VerticalAlignment="Center" />
+                                <v:HelpIcon Chave="tune.quest" />
+                            </StackPanel>
                             <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtQuest" Text="1" Margin="0,3" />
 
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Loot comum de criatura" Margin="0,5" />
+                            <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Margin="0,5">
+                                <TextBlock Text="Loot comum de criatura" VerticalAlignment="Center" />
+                                <v:HelpIcon Chave="tune.creature" />
+                            </StackPanel>
                             <TextBox   Grid.Row="1" Grid.Column="1" x:Name="TxtCreature" Text="1" Margin="0,3" />
                         </Grid>
                         <TextBlock Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap"

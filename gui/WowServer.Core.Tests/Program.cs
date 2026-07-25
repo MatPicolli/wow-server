@@ -564,5 +564,79 @@ Check("ha comandos de console prontos para enviar", prontos.Count > 0, string.Jo
 var desligar = GmCommands.All.First(c => c.Template.StartsWith("server shutdown"));
 Check("shutdown pede o tempo em vez de fixar", desligar.NeedsFilling, desligar.Template);
 
+// ---- ajuda dos campos -----------------------------------------------------
+Check("catalogo de ajuda nao esta vazio", FieldHelp.All.Count > 0);
+Check("chaves de ajuda nao se repetem",
+      FieldHelp.All.Select(e => e.Key).Distinct(StringComparer.Ordinal).Count() == FieldHelp.All.Count);
+Check("toda ajuda tem titulo e descricao",
+      FieldHelp.All.All(e => !string.IsNullOrWhiteSpace(e.Title)
+                          && !string.IsNullOrWhiteSpace(e.Description)));
+
+// O pedido era "exemplos que podem ser escritos ou selecionados, cada um
+// explicando" - entao entrada sem exemplo, ou exemplo sem explicacao, e falha.
+foreach (var e in FieldHelp.All)
+{
+    Check($"ajuda '{e.Key}' tem exemplos", e.Examples.Count > 0);
+    Check($"exemplos de '{e.Key}' vem explicados",
+          e.Examples.All(x => !string.IsNullOrWhiteSpace(x.Value)
+                           && !string.IsNullOrWhiteSpace(x.Meaning)));
+}
+
+Check("Find acha uma chave existente", FieldHelp.Find("db.host") is not null);
+Check("Find devolve null para chave inexistente", FieldHelp.Find("nao.existe") is null);
+Check("Find diferencia maiuscula", FieldHelp.Find("DB.HOST") is null);
+
+// A checagem que realmente importa: cada Chave="..." usada no XAML precisa
+// existir aqui. Como o projeto WPF nao compila em todo ambiente, um erro de
+// digitacao passaria despercebido ate virar um balao vazio na tela do usuario.
+var raiz = AppContext.BaseDirectory;
+string? repo = null;
+for (var pasta = new DirectoryInfo(raiz); pasta is not null; pasta = pasta.Parent)
+{
+    if (Directory.Exists(Path.Combine(pasta.FullName, "WowServer.Gui"))) { repo = pasta.FullName; break; }
+    if (Directory.Exists(Path.Combine(pasta.FullName, "gui", "WowServer.Gui")))
+    {
+        repo = Path.Combine(pasta.FullName, "gui");
+        break;
+    }
+}
+
+if (repo is null)
+{
+    Check("achei o projeto da interface para conferir as chaves", false, raiz);
+}
+else
+{
+    var xamls = Directory.GetFiles(Path.Combine(repo, "WowServer.Gui"), "*.xaml",
+                                   SearchOption.AllDirectories);
+    Check("achei arquivos .xaml", xamls.Length > 0, repo);
+
+    var usadas = new List<(string Chave, string Arquivo)>();
+    foreach (var arquivo in xamls)
+    {
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(
+                     File.ReadAllText(arquivo), @"Chave=""([^""]*)"""))
+        {
+            usadas.Add((m.Groups[1].Value, Path.GetFileName(arquivo)));
+        }
+    }
+
+    Check("a interface usa o catalogo de ajuda", usadas.Count > 0);
+
+    foreach (var (chave, arquivo) in usadas)
+    {
+        Check($"chave '{chave}' usada em {arquivo} existe no catalogo",
+              FieldHelp.Find(chave) is not null);
+    }
+
+    // Entrada nao usada nao quebra nada, mas e texto escrito a toa.
+    var orfas = FieldHelp.All
+        .Select(e => e.Key)
+        .Where(k => !usadas.Any(u => u.Chave == k))
+        .ToList();
+    Check("nenhuma ajuda ficou sem campo que a use", orfas.Count == 0, string.Join(", ", orfas));
+}
+
 Console.WriteLine($"\n{total - falhas}/{total} testes passaram (final)");
 return falhas == 0 ? 0 : 1;

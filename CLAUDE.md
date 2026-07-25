@@ -269,6 +269,11 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 - `TextWrapping="Wrap"` inside a `ListBox` needs
   `ScrollViewer.HorizontalScrollBarVisibility="Disabled"` — that is what
   constrains the item to the viewport width.
+- Every input control carries a `<v:HelpIcon Chave="..."/>`. The text lives in
+  `FieldHelp` (Core), not the XAML, so the tests can assert every entry has
+  explained examples **and** that every `Chave` used in any `.xaml` resolves —
+  a typo there would otherwise surface as an empty tooltip on the user's screen,
+  since the WPF project does not compile in this environment.
 - Views are built before `Session.Current.Loaded` exists, so anything derived
   from settings must be recomputed on `Loaded` **unconditionally**. Guarding
   that refresh with `if (Session.Current.Loaded is null)` looks like an

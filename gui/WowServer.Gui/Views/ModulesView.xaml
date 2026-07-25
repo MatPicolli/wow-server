@@ -22,7 +22,8 @@
 
                 <DockPanel Margin="0,0,0,10">
                     <TextBlock DockPanel.Dock="Left" Text="Filtrar" VerticalAlignment="Center"
-                               Margin="0,0,8,0" Foreground="{StaticResource TextDim}" FontSize="12" />
+                               Margin="0,0,4,0" Foreground="{StaticResource TextDim}" FontSize="12" />
+                    <v:HelpIcon DockPanel.Dock="Left" Chave="mod.filtro" Margin="0,0,8,0" />
                     <CheckBox x:Name="ChkSoNaoInstalados" DockPanel.Dock="Right" Content="ocultar instalados"
                               FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"
                               Checked="Filtro_Changed" Unchecked="Filtro_Changed" />
@@ -42,6 +43,7 @@
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="Instalar" Margin="8,0,0,0"
                                     Click="InstalarUrl_Click" />
+                            <v:HelpIcon DockPanel.Dock="Left" Chave="mod.url" Margin="0,0,6,0" />
                             <TextBox x:Name="CaixaUrl" FontFamily="Consolas" FontSize="11"
                                      ToolTip="Ex.: https://github.com/azerothcore/mod-duel-reset" />
                         </DockPanel>

@@ -26,7 +26,8 @@
                                    Text="Envia pelo correio todos os itens de herança que existem no seu banco. A lista sai de uma consulta, não de IDs escritos à mão, então inclui o que os seus módulos tenham acrescentado. Chega em cartas de 12 itens." />
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Left" Text="Personagem" VerticalAlignment="Center"
-                                       Margin="0,0,8,0" FontSize="12" />
+                                       Margin="0,0,4,0" FontSize="12" />
+                            <v:HelpIcon DockPanel.Dock="Left" Chave="cmd.personagem" Margin="0,0,8,0" />
                             <Button DockPanel.Dock="Right" Content="Enviar" Margin="8,0,0,0"
                                     Click="Heranca_Click" />
                             <Button DockPanel.Dock="Right" Content="Ver o que existe" Margin="8,0,0,0"
@@ -40,7 +41,8 @@
 
                 <DockPanel Margin="0,0,0,12">
                     <TextBlock DockPanel.Dock="Left" Text="Filtrar" VerticalAlignment="Center"
-                               Margin="0,0,8,0" Foreground="{StaticResource TextDim}" FontSize="12" />
+                               Margin="0,0,4,0" Foreground="{StaticResource TextDim}" FontSize="12" />
+                    <v:HelpIcon DockPanel.Dock="Left" Chave="cmd.filtro" Margin="0,0,8,0" />
                     <TextBox x:Name="CaixaFiltro" TextChanged="Filtro_Changed"
                              ToolTip="Filtra por nome ou descrição. Ex.: conta, item, teleporte" />
                 </DockPanel>

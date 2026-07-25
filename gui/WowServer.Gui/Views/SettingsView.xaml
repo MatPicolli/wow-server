@@ -1,6 +1,7 @@
 <UserControl x:Class="WowServer.Gui.Views.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:WowServer.Gui.Views">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24" MaxWidth="720" HorizontalAlignment="Left">
 
@@ -18,22 +19,37 @@
 
             <GroupBox Header="Pastas">
                 <StackPanel>
-                    <TextBlock Text="Client do WoW (a pasta que contém Wow.exe)" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Client do WoW (a pasta que contém Wow.exe)" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="pasta.client" />
+                    </StackPanel>
                     <DockPanel Margin="0,0,0,10">
                         <Button DockPanel.Dock="Right" Content="Procurar..." Margin="8,0,0,0" Click="EscolherClient_Click" />
                         <TextBox x:Name="TxtClient" />
                     </DockPanel>
 
-                    <TextBlock Text="Raiz da instalação" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Raiz da instalação" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="pasta.root" />
+                    </StackPanel>
                     <TextBox x:Name="TxtRoot" Margin="0,0,0,10" />
 
-                    <TextBlock Text="Código-fonte" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Código-fonte" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="pasta.source" />
+                    </StackPanel>
                     <TextBox x:Name="TxtSource" Margin="0,0,0,10" />
 
-                    <TextBlock Text="Compilação" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Compilação" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="pasta.build" />
+                    </StackPanel>
                     <TextBox x:Name="TxtBuild" Margin="0,0,0,10" />
 
-                    <TextBlock Text="Servidor pronto" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Servidor pronto" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="pasta.server" />
+                    </StackPanel>
                     <TextBox x:Name="TxtServer" />
                 </StackPanel>
             </GroupBox>
@@ -51,35 +67,62 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="Servidor MySQL" Margin="0,7" />
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,7">
+                        <TextBlock Text="Servidor MySQL" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="db.host" />
+                    </StackPanel>
                     <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtHost" Margin="0,4" />
 
-                    <TextBlock Grid.Row="1" Text="Porta" Margin="0,7" />
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,7">
+                        <TextBlock Text="Porta" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="db.port" />
+                    </StackPanel>
                     <TextBox   Grid.Row="1" Grid.Column="1" x:Name="TxtPort" Margin="0,4" />
 
-                    <TextBlock Grid.Row="2" Text="Usuário" Margin="0,7" />
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,7">
+                        <TextBlock Text="Usuário" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="db.user" />
+                    </StackPanel>
                     <TextBox   Grid.Row="2" Grid.Column="1" x:Name="TxtUser" Margin="0,4" />
 
-                    <TextBlock Grid.Row="3" Text="Senha" Margin="0,7" />
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,7">
+                        <TextBlock Text="Senha" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="db.pass" />
+                    </StackPanel>
                     <TextBox   Grid.Row="3" Grid.Column="1" x:Name="TxtPass" Margin="0,4" />
 
-                    <TextBlock Grid.Row="4" Text="Banco de contas" Margin="0,7" />
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,7">
+                        <TextBlock Text="Banco de contas" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="db.auth" />
+                    </StackPanel>
                     <TextBox   Grid.Row="4" Grid.Column="1" x:Name="TxtAuthDb" Margin="0,4" />
 
-                    <TextBlock Grid.Row="5" Text="Banco de mundo" Margin="0,7" />
+                    <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,7">
+                        <TextBlock Text="Banco de mundo" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="db.world" />
+                    </StackPanel>
                     <TextBox   Grid.Row="5" Grid.Column="1" x:Name="TxtWorldDb" Margin="0,4" />
 
-                    <TextBlock Grid.Row="6" Text="Banco de personagens" Margin="0,7" />
+                    <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,7">
+                        <TextBlock Text="Banco de personagens" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="db.char" />
+                    </StackPanel>
                     <TextBox   Grid.Row="6" Grid.Column="1" x:Name="TxtCharDb" Margin="0,4" />
                 </Grid>
             </GroupBox>
 
             <GroupBox Header="Realm">
                 <StackPanel>
-                    <TextBlock Text="Nome do servidor" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Nome do servidor" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="realm.nome" />
+                    </StackPanel>
                     <TextBox x:Name="TxtRealmName" Margin="0,0,0,10" />
 
-                    <TextBlock Text="Endereço que o client usa" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Endereço que o client usa" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="realm.endereco" />
+                    </StackPanel>
                     <TextBox x:Name="TxtRealmAddr" />
                     <TextBlock Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
                                Text="127.0.0.1 para jogar só nesta máquina. Para jogar de outro PC da rede, use o IP local desta máquina." />
@@ -88,9 +131,15 @@
 
             <GroupBox Header="Código-fonte do servidor">
                 <StackPanel>
-                    <TextBlock Text="Repositório" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Repositório" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="core.repo" />
+                    </StackPanel>
                     <TextBox x:Name="TxtSourceRepo" Margin="0,0,0,10" />
-                    <TextBlock Text="Branch" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Branch" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="core.branch" />
+                    </StackPanel>
                     <TextBox x:Name="TxtSourceBranch" />
                     <TextBlock Foreground="{StaticResource Warn}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
                                Text="Trocar aqui exige clonar de novo e recompilar. A aba Módulos faz isso automaticamente ao instalar um módulo que precise." />
@@ -99,13 +148,22 @@
 
             <GroupBox Header="Compilação e extração">
                 <StackPanel>
-                    <TextBlock Text="Threads (0 = todos os núcleos)" Margin="0,0,0,4" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Threads (0 = todos os núcleos)" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="build.threads" />
+                    </StackPanel>
                     <TextBox x:Name="TxtThreads" Margin="0,0,0,4" />
                     <TextBlock Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap"
                                Margin="0,0,0,12"
                                Text="Cada thread vira um processo do compilador consumindo 500–800 MB. Com 12 núcleos são uns 7 GB de RAM durante a compilação — é esperado, e some quando termina. Se a máquina ficar inutilizável enquanto compila, use metade dos núcleos: leva mais tempo, mas sobra memória para o resto." />
-                    <CheckBox x:Name="ChkVmaps" Content="Extrair vmaps (linha de visão — sem isso mobs enxergam através de parede)" />
-                    <CheckBox x:Name="ChkMmaps" Content="Extrair mmaps (navegação — sem isso mobs andam em linha reta)" />
+                    <StackPanel Orientation="Horizontal">
+                        <CheckBox x:Name="ChkVmaps" Content="Extrair vmaps (linha de visão — sem isso mobs enxergam através de parede)" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="build.vmaps" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <CheckBox x:Name="ChkMmaps" Content="Extrair mmaps (navegação — sem isso mobs andam em linha reta)" VerticalAlignment="Center" />
+                        <v:HelpIcon Chave="build.mmaps" />
+                    </StackPanel>
                 </StackPanel>
             </GroupBox>
 

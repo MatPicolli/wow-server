@@ -1,0 +1,21 @@
+<UserControl x:Class="WowServer.Gui.Views.HelpIcon"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             VerticalAlignment="Center" HorizontalAlignment="Left"
+             Focusable="False">
+    <!-- ToolTipService no proprio controle: sem ShowDuration alto o balao some
+         em ~5s, o que e pouco para um texto com exemplos. InitialShowDelay
+         curto porque o icone so existe para ser apontado. -->
+    <Border x:Name="Bolha"
+            Width="16" Height="16" CornerRadius="8" Margin="6,0,0,0"
+            Background="{StaticResource BgConsole}"
+            BorderBrush="{StaticResource Border}" BorderThickness="1"
+            ToolTipService.InitialShowDelay="200"
+            ToolTipService.ShowDuration="120000"
+            ToolTipService.BetweenShowDelay="0"
+            Cursor="Help">
+        <TextBlock Text="?" FontSize="11" FontWeight="SemiBold"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Foreground="{StaticResource TextDim}" />
+    </Border>
+</UserControl>
