@@ -39,6 +39,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\repair-settings.ps1         # recover a settings.psd1 with duplicate keys
 .\scripts\switch-core.ps1 -Playerbots # swap the core for a fork; preview, then -Apply
 .\scripts\remove-module.ps1 -Name mod-eluna   # preview, then -Apply
+.\scripts\reset-server.ps1           # wipe everything rebuildable, keep the extraction
 ```
 
 Numbered scripts `00`–`08` are the install pipeline and are individually
@@ -185,6 +186,14 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   (`4` = Info, `2` = Error).
 - `server shutdown` rejects a delay of `0` with `LANG_BAD_VALUE`
   ("Incorrect values."). Minimum is 1.
+- The extracted data ends up in `<ServerDir>\Data`, **inside** the folder that
+  also holds the binaries. Deleting the server folder to start over throws away
+  the multi-hour extraction; `reset-server.ps1` deletes around it.
+- A stage counts as already extracted if its folder in `Data\` has files.
+  Checking only the client folder — which is where extraction runs, before the
+  results are *moved* to `Data\` — made a finished install look untouched and
+  re-ran the mmaps pass. No marker file is written into `Data\`: the worldserver
+  reads that directory.
 - Extractors are named `map_extractor.exe` / `vmap4_extractor.exe` /
   `vmap4_assembler.exe`; older docs say the underscore-less spellings. Accept
   both.

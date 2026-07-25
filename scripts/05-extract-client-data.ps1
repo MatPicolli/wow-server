@@ -82,10 +82,26 @@ foreach ($aux in @('mmaps-config.yaml', 'offmesh.txt')) {
 }
 Write-Ok "extractors copiados"
 
+function Get-StageDir {
+    <#
+        Os dois lugares onde o resultado de uma etapa pode estar.
+
+        A extracao roda dentro da pasta do client e, no fim, MOVE tudo para
+        <ServerDir>\Data. Depois de uma instalacao concluida, portanto, nao
+        sobra nada no client - e olhar so para la faria o script concluir que
+        nunca extraiu nada e refazer horas de mmaps.
+    #>
+    param([string]$Name)
+    return ,@((Join-Path $client $Name), (Join-Path $dataDir $Name))
+}
+
 function Test-ExtractedDir {
     param([string]$Name)
-    $p = Join-Path $client $Name
-    return (Test-Path $p) -and ((Get-ChildItem $p -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0)
+    foreach ($p in (Get-StageDir $Name)) {
+        if (-not (Test-Path $p)) { continue }
+        if (@(Get-ChildItem $p -File -ErrorAction SilentlyContinue).Count -gt 0) { return $true }
+    }
+    return $false
 }
 
 # Marcador gravado na pasta de saida quando uma etapa termina de verdade.
@@ -96,10 +112,10 @@ function Test-ExtractedDir {
 $StageMarker = '.extract-complete'
 
 function Set-StageComplete {
-    param([string]$Name)
-    $dir = Join-Path $client $Name
-    if (Test-Path $dir) {
-        Set-Content -LiteralPath (Join-Path $dir $StageMarker) `
+    param([string]$Name, [string]$Dir)
+    if (-not $Dir) { $Dir = Join-Path $client $Name }
+    if (Test-Path $Dir) {
+        Set-Content -LiteralPath (Join-Path $Dir $StageMarker) `
                     -Value (Get-Date -Format 'o') -Encoding ASCII
     }
 }
@@ -125,6 +141,18 @@ function Test-StageComplete {
         necessariamente gera indice - entao o marcador manda.
     #>
     param([string]$Name, [string]$IndexFilter, [int]$ExpectedTotal = 0)
+
+    # Data\ primeiro: e onde o resultado fica depois de uma instalacao que deu
+    # certo, e o criterio la e mais simples. O move so acontece quando todas as
+    # etapas pedidas terminaram - qualquer falha ou Ctrl+C aborta o script
+    # antes. Entao arquivo em Data\ significa etapa concluida, mesmo sem
+    # marcador (instalacoes feitas antes desta versao nao tem um).
+    $emData = Join-Path $dataDir $Name
+    if (Test-Path $emData) {
+        if (@(Get-ChildItem $emData -File -ErrorAction SilentlyContinue).Count -gt 0) {
+            return $true
+        }
+    }
 
     $dir = Join-Path $client $Name
     if (-not (Test-Path $dir)) { return $false }
@@ -268,7 +296,9 @@ foreach ($folder in @('dbc', 'maps', 'vmaps', 'mmaps', 'Cameras')) {
     $from = Join-Path $client $folder
     if (-not (Test-Path $from)) { continue }
 
-    # o marcador e controle interno da extracao; nao tem o que fazer em Data\
+    # O marcador nao vai junto: Data\ e lida pelo worldserver, e nao ha por que
+    # plantar arquivo estranho la. A prova de que a etapa terminou passa a ser
+    # a propria presenca dos arquivos em Data\ - ver Test-StageComplete.
     $marker = Join-Path $from $StageMarker
     if (Test-Path $marker) { Remove-Item $marker -Force -ErrorAction SilentlyContinue }
 
