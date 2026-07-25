@@ -1,0 +1,221 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this repository is
+
+Tooling to build and run a personal **AzerothCore 3.3.5a (WotLK, client build
+12340)** World of Warcraft server **on Windows**, compiled from source. It
+contains no server code — AzerothCore is cloned into `C:\AzerothCore\source`
+(configurable) and built there.
+
+Two layers:
+
+- `scripts/` — PowerShell scripts that do all the actual work.
+- `gui/` — a WPF front end (.NET 10) that **drives those scripts**. It does not
+  reimplement any of them.
+
+**The user is Brazilian. All user-facing text — script output, GUI labels,
+docs, error messages — is in Portuguese.** Code identifiers, comments and
+commit messages are in English, except in the PowerShell scripts where comments
+are Portuguese without accents (they are read in consoles with varying code
+pages).
+
+## Commands
+
+Everything below runs from the repository root unless noted.
+
+### Server lifecycle (PowerShell, Windows)
+
+```powershell
+Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then edit ClientDir
+.\scripts\00-check-prereqs.ps1        # diagnose in seconds instead of failing 30 min into a build
+.\scripts\setup-all.ps1               # steps 2-7 chained; -From N resumes; -SkipMmaps skips the multi-hour pass
+.\scripts\start-server.ps1            # opens authserver + worldserver
+.\scripts\stop-server.ps1             # clean shutdown; -Force kills
+.\scripts\rebuild.ps1                 # build -> deploy -> configure, after adding/removing modules
+.\scripts\backup-db.ps1               # safe to run against a live server
+.\scripts\repair-settings.ps1         # recover a settings.psd1 with duplicate keys
+```
+
+Numbered scripts `00`–`08` are the install pipeline and are individually
+runnable and idempotent. `01-install-prereqs.ps1` needs Administrator.
+
+Tuning scripts preview by default and require `-Apply` to write:
+
+```powershell
+.\scripts\tune-professions.ps1 -Mining 3 -Herbalism 3      # gathering yield (MinCount/MaxCount)
+.\scripts\tune-drop-chance.ps1 -QuestItems 3               # drop chance (Chance column)
+.\scripts\tune-professions.ps1 -Reset -Apply               # restore originals
+```
+
+### GUI
+
+```powershell
+cd gui
+dotnet run --project WowServer.Core.Tests    # tests — run these, they work on any platform
+dotnet run --project WowServer.Gui           # Windows only (WPF)
+.\build.ps1 -Test -Publish                   # publish a single-file exe to gui\publish
+```
+
+There is no test framework. `WowServer.Core.Tests` is a plain console app with a
+local `Check(name, condition)` helper; it prints results and exits non-zero on
+failure. Add cases by appending to `Program.cs`.
+
+## Architecture
+
+### The scripts are the source of truth
+
+The GUI shells out to `powershell.exe -File scripts\<name>.ps1` and streams the
+output into console panes. Behaviour that took real debugging to get right —
+OpenSSL 3.x detection, both extractor filename spellings, stage completion
+markers, multiplier idempotency — lives in the scripts only. **Fix bugs in the
+scripts, not in C#**, so both entry points benefit.
+
+`scripts/lib/common.ps1` is dot-sourced by every script and holds shared
+helpers: settings loading with defaults, `Invoke-MySql`, progress rendering,
+`Write-Fail`. It also sets `[Console]::OutputEncoding` to UTF-8 (see gotchas).
+
+### Configuration
+
+`config/settings.psd1` (gitignored, created from `settings.example.psd1`) holds
+paths, MySQL credentials, realm details and which core repository to clone.
+`Import-ServerSettings` fills defaults for optional keys — necessary because
+under `Set-StrictMode -Version Latest` a missing hashtable key **throws** rather
+than returning `$null`.
+
+The GUI edits this file surgically through `Psd1Editor` rather than
+regenerating it, because the file is mostly explanatory comments meant to be
+read and hand-edited.
+
+### GUI project split
+
+| Project | Target | Why |
+|---|---|---|
+| `WowServer.Core` | `net8.0` | All logic. Compiles and tests on any platform, including Linux CI. |
+| `WowServer.Gui` | `net10.0-windows` | WPF shell only. Windows-only build. |
+| `WowServer.Core.Tests` | `net8.0` | Console app, no external packages. |
+
+The split exists so the logic can be verified in environments where WPF cannot
+build. Keep testable logic in `Core`; keep `Gui` code-behind thin.
+
+Each view creates its own `ScriptRunner` via `Session.Current.CreateRunner()`.
+Sharing one instance would deliver every script's output to every pane's
+`Output` handler.
+
+## Gotchas that cost real debugging time
+
+Each of these was a shipped bug. The commit messages carry the full reasoning.
+
+**PowerShell**
+
+- `Set-StrictMode -Version Latest` makes a missing hashtable key throw. Optional
+  settings keys get defaults in `Import-ServerSettings`.
+- `$host`, `$args`, `$input` are automatic variables — never use them as loop or
+  local variable names.
+- `Set-Content -Encoding UTF8` writes a **BOM** on Windows PowerShell 5.1, which
+  breaks AzerothCore's config parser and `mysql < file.sql`. Use
+  `Write-TextFileNoBom`, or let the tool write the file (`mysqldump
+  --result-file`).
+- Under `$ErrorActionPreference = 'Stop'`, `2>&1` on a native command turns
+  stderr into a terminating error **before** `$LASTEXITCODE` is read, hiding the
+  real message. Relax the preference around such calls, and convert
+  `ErrorRecord`s to strings before display or PowerShell's decoration buries the
+  actual error.
+- A script must `exit 0` explicitly on success if a caller checks
+  `$LASTEXITCODE`; otherwise it carries the last native command's value.
+- Splatting needs `@variable`. `@($hash.Args)` builds an array and passes the
+  hashtable positionally.
+
+**Process handling**
+
+- `Start-Process -PassThru` returns a `Process` whose `ExitCode` reads back as
+  `$null` on Windows unless `.Handle` is touched once after starting.
+- `CloseMainWindow()` does nothing for a process started with
+  `CreateNoWindow` — there is no window.
+- Redirecting stdout to a pipe switches the C runtime to 4 KB block buffering. A
+  quiet process (the authserver) never flushes; that pane is fed by tailing
+  `Auth.log` instead.
+- .NET decodes redirected output with the system ANSI code page. Set
+  `StandardOutputEncoding` to UTF-8 on both streams, and keep the PowerShell
+  side matching.
+
+**Regex on Windows files**
+
+- In multiline mode `$` matches before `\n`, leaving the `\r` of CRLF
+  unconsumed. A pattern ending in `$` silently fails to match on
+  Windows-authored files. Use `(?=\r?\n|$)`. This one corrupted a real
+  `settings.psd1` by appending every key instead of replacing it, producing
+  duplicates that `Import-PowerShellDataFile` rejects. **Test string-processing
+  code with both LF and CRLF** — literals authored on Linux are LF.
+
+**MySQL**
+
+- MySQL 8 defaults to `sql_mode=only_full_group_by`; MariaDB does not. A
+  `GROUP BY` that works locally may fail with `ERROR 1055` for the user.
+- `MinCount`/`MaxCount` in loot tables are `tinyint unsigned`; writing >255
+  fails the whole statement under strict mode, so clamp with `LEAST(255, ...)`
+  and report when clamping happens.
+- Pass passwords via `MYSQL_PWD`, not `--password`, to avoid the client's
+  warning polluting stderr.
+
+**AzerothCore**
+
+- Log level numbering is inverted from intuition: higher is more verbose
+  (`4` = Info, `2` = Error).
+- `server shutdown` rejects a delay of `0` with `LANG_BAD_VALUE`
+  ("Incorrect values."). Minimum is 1.
+- Extractors are named `map_extractor.exe` / `vmap4_extractor.exe` /
+  `vmap4_assembler.exe`; older docs say the underscore-less spellings. Accept
+  both.
+- Module SQL is applied automatically by the worldserver's updater. Many module
+  READMEs still say to import it manually — that is outdated and risks
+  duplicates.
+- Most modules have no root `CMakeLists.txt`; the core aggregates them. Don't
+  use its presence to detect an installed module.
+- Some modules pull dependencies as git submodules — clone with
+  `--recurse-submodules`.
+- Playerbots and NPCBots are **not modules**: each requires replacing the core
+  with a fork. Installing them over the stock core produces dozens of `C2660`
+  errors. Switching forks deletes the source tree, and `modules/` lives inside
+  it.
+
+**WPF**
+
+- Setting a property like `IsChecked="True"` in XAML raises its changed event
+  during `InitializeComponent`, when elements declared later do not exist yet.
+  Set such initial values in the constructor.
+- `TextWrapping="Wrap"` inside a `ListBox` needs
+  `ScrollViewer.HorizontalScrollBarVisibility="Disabled"` — that is what
+  constrains the item to the viewport width.
+
+## Working conventions
+
+- **Verify claims against sources.** AzerothCore behaviour was repeatedly
+  confirmed by reading its actual source or config files rather than relying on
+  memory or wiki summaries, several of which are outdated.
+- Tuning scripts snapshot original values into a backup table and compute every
+  update from that snapshot, so applying `3x` twice stays `3x` and `-Reset`
+  restores exactly. Preserve that property in anything similar.
+- Destructive or long operations preview by default and require an explicit
+  flag to act.
+- Commit messages explain *why* the change exists, and state plainly what was
+  verified and what was not.
+
+## Environment constraints
+
+This repository is normally worked on from a Linux container while the user runs
+Windows. That means:
+
+- The WPF project **cannot be compiled here**. Verify what is verifiable:
+  `WowServer.Core` builds and its tests pass, every `.xaml` parses as XML, and
+  every `x:Name` referenced in code-behind exists in its XAML. Say clearly that
+  the GUI itself was not compiled.
+- PowerShell scripts can be parse-checked with
+  `[System.Management.Automation.Language.Parser]::ParseFile` under `pwsh`, but
+  Windows-specific behaviour (5.1 error records, `Start-Process` exit codes,
+  registry, elevation) cannot be reproduced.
+- MySQL logic can be exercised by installing MariaDB locally — but start it with
+  MySQL 8's `sql_mode` to catch strictness differences.
+- The user's machine is unreachable. Deliverables are scripts and code they run
+  themselves.
