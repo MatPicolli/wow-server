@@ -104,6 +104,33 @@ function Test-ExtractedDir {
     return $false
 }
 
+function Test-DirTemArquivo {
+    param([string]$Path, [string]$Filter = '*')
+    if (-not (Test-Path $Path)) { return $false }
+    return (Get-FileCount -Path $Path -Filter $Filter) -gt 0
+}
+
+function Get-MmapsWorkDir {
+    <#
+        De onde rodar o mmaps_generator.
+
+        Ele nao aceita parametro de pasta de dados: resolve 'maps' e 'vmaps'
+        relativos ao diretorio de trabalho (Config.cpp usa o diretorio atual, e
+        so cai para a pasta do executavel se o atual nao tiver 'maps').
+
+        Durante a instalacao, os dados estao na pasta do client. Depois que ela
+        termina, foram movidos para Data\ - e ai rodar a partir do client falha
+        com "'maps' directory is empty or does not exist", que e exatamente o
+        que acontece ao refazer os mmaps depois de trocar de core.
+    #>
+    foreach ($candidato in @($client, $dataDir)) {
+        $temMaps  = Test-DirTemArquivo -Path (Join-Path $candidato 'maps')  -Filter '*.map'
+        $temVmaps = Test-DirTemArquivo -Path (Join-Path $candidato 'vmaps') -Filter '*.vmtree'
+        if ($temMaps -and $temVmaps) { return $candidato }
+    }
+    return $null
+}
+
 # Marcador gravado na pasta de saida quando uma etapa termina de verdade.
 # "Tem arquivo na pasta" nao serve como criterio: se a geracao for interrompida
 # no meio (Ctrl+C durante as horas de mmaps), a pasta fica com resultado
@@ -186,16 +213,25 @@ function Invoke-Extractor {
         [string]$Label,
         [string]$WatchDir,
         [string]$WatchFilter = '*',
-        [int]$ExpectedTotal = 0
+        [int]$ExpectedTotal = 0,
+
+        # De onde rodar. O padrao e a pasta do client, que e onde estao os MPQ e
+        # onde a instalacao normal acontece. O gerador de mmaps precisa do
+        # contrario: ele le maps\ e vmaps\ relativos ao diretorio de trabalho, e
+        # depois de uma instalacao concluida esses dados moraram para Data\.
+        [string]$WorkDir
     )
 
+    if (-not $WorkDir) { $WorkDir = $client }
+
     Write-Info "rodando $Exe ..."
+    if ($WorkDir -ne $client) { Write-Info "a partir de $WorkDir" }
     $started = Get-Date
 
     $code = Invoke-ProcessWithProgress `
                 -FilePath (Join-Path $client $Exe) `
                 -Arguments $Arguments `
-                -WorkingDirectory $client `
+                -WorkingDirectory $WorkDir `
                 -Activity $Label `
                 -WatchDir $WatchDir `
                 -WatchFilter $WatchFilter `
@@ -270,20 +306,40 @@ if ($doMmaps) {
     if ((Test-StageComplete -Name 'mmaps' -IndexFilter '*.mmap' -ExpectedTotal $mapCount) -and -not $Force) {
         Write-Ok "ja extraido, pulando"
     } else {
-        if (-not (Test-ExtractedDir 'vmaps')) {
-            Write-Fail "Os mmaps precisam dos vmaps, e a pasta vmaps esta vazia." `
+        # O gerador le maps\ e vmaps\ a partir do diretorio de trabalho, entao o
+        # que importa nao e se os dados existem, e sim se existem JUNTOS num
+        # lugar so - na pasta do client durante a instalacao, ou em Data\ depois.
+        $mmapsDir = Get-MmapsWorkDir
+        if (-not $mmapsDir) {
+            Write-Fail 'nao achei maps\ e vmaps\ juntos nem na pasta do client nem em Data\.' `
                        "Rode antes: .\scripts\05-extract-client-data.ps1 -Only vmaps"
         }
-        New-DirectoryIfMissing (Join-Path $client 'mmaps')
+
+        $saidaMmaps = Join-Path $mmapsDir 'mmaps'
+        New-DirectoryIfMissing $saidaMmaps
+
+        # Com -Force a ideia e refazer: tiles antigos sobrando seriam recusados
+        # pelo servidor do mesmo jeito, e ainda enganariam a barra de progresso,
+        # que conta arquivos na pasta de saida.
+        if ($Force -and (Test-DirTemArquivo -Path $saidaMmaps -Filter '*.mmtile')) {
+            Write-Info "limpando os mmaps antigos em $saidaMmaps ..."
+            Remove-Item (Join-Path $saidaMmaps '*') -Recurse -Force -ErrorAction SilentlyContinue
+        }
 
         $threads = if ($MmapThreads -gt 0) { $MmapThreads } else { Get-ThreadCount -Settings $settings }
         Write-Info "usando $threads threads - a maquina vai ficar pesada"
         Write-Info "NAO feche a janela; termina quando aparecer 'Press any key'"
         if ($mapCount -gt 0) { Write-Info "$mapCount mapas a processar" }
         if (-not $exeMmapsGenerator) { Write-Fail "Gerador de mmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
+
         Invoke-Extractor -Exe $exeMmapsGenerator -Arguments @('--threads', "$threads") -Label 'Gerando mmaps' `
-                         -WatchDir (Join-Path $client 'mmaps') -WatchFilter '*.mmap' -ExpectedTotal $mapCount
-        Set-StageComplete -Name 'mmaps'
+                         -WorkDir $mmapsDir `
+                         -WatchDir $saidaMmaps -WatchFilter '*.mmap' -ExpectedTotal $mapCount
+
+        # Marcador so na pasta do client. Se a geracao foi direto em Data\, o
+        # que prova a conclusao e a presenca dos arquivos - Data\ nao recebe
+        # arquivo de controle, porque quem a le e o worldserver.
+        if ($mmapsDir -eq $client) { Set-StageComplete -Name 'mmaps' }
     }
 }
 
@@ -303,6 +359,19 @@ foreach ($folder in @('dbc', 'maps', 'vmaps', 'mmaps', 'Cameras')) {
     if (Test-Path $marker) { Remove-Item $marker -Force -ErrorAction SilentlyContinue }
 
     $to = Join-Path $dataDir $folder
+
+    # Pasta de origem vazia nunca substitui o destino. Sem isso, um diretorio
+    # esquecido no client - o caso de refazer os mmaps, que agora sao gerados
+    # direto em Data\ - faria o -Force apagar o resultado bom e por um vazio no
+    # lugar. Horas de trabalho por uma pasta abandonada.
+    if (-not (Test-DirTemArquivo -Path $from)) {
+        if (Test-DirTemArquivo -Path $to) {
+            Write-Info "$folder no client esta vazio; mantendo o que ja esta em Data\"
+        }
+        Remove-Item $from -Recurse -Force -ErrorAction SilentlyContinue
+        continue
+    }
+
     if (Test-Path $to) {
         if (-not $Force) {
             Write-Info "$folder ja existe no destino, mantendo"

@@ -212,6 +212,15 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 - The extracted data ends up in `<ServerDir>\Data`, **inside** the folder that
   also holds the binaries. Deleting the server folder to start over throws away
   the multi-hour extraction; `reset-server.ps1` deletes around it.
+- `mmaps_generator` resolves `maps/` and `vmaps/` **relative to its working
+  directory** and takes no path argument (only `--config`). After a finished
+  install those folders live in `Data\`, so re-running `-Only mmaps` from the
+  client folder dies with "'maps' directory is empty or does not exist" (exit
+  -3). `Get-MmapsWorkDir` picks whichever directory holds both, and the output
+  then lands straight in `Data\mmaps`.
+- The move-to-`Data\` step must never let an empty source folder replace a
+  populated destination: with `-Force` a leftover empty `client\mmaps` would
+  delete hours of freshly generated tiles.
 - A stage counts as already extracted if its folder in `Data\` has files.
   Checking only the client folder — which is where extraction runs, before the
   results are *moved* to `Data\` — made a finished install look untouched and
