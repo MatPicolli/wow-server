@@ -84,7 +84,7 @@ public partial class ModulesView : UserControl
                 && m.Status == ModuleStatus.ExigeFork
                 && m.ForkRepository is not null
                 && cfg is not null
-                && !MesmoRepositorio(cfg.SourceRepository, m.ForkRepository);
+                && !ModuleCatalog.SatisfiesFork(m, cfg.SourceRepository);
 
             var (selo, cor) = m.Status switch
             {
@@ -126,12 +126,6 @@ public partial class ModulesView : UserControl
 
         Lista.ItemsSource = itens;
     }
-
-    private static bool MesmoRepositorio(string a, string b) =>
-        string.Equals(
-            a.Trim().TrimEnd('/').Replace(".git", "", StringComparison.OrdinalIgnoreCase),
-            b.Trim().TrimEnd('/').Replace(".git", "", StringComparison.OrdinalIgnoreCase),
-            StringComparison.OrdinalIgnoreCase);
 
     private void Abrir_Click(object sender, RoutedEventArgs e)
     {

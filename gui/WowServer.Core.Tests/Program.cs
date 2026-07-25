@@ -360,5 +360,66 @@ Check("reset zera tudo", bt is { CompiledFiles: 0, Errors: 0, FinishedProjects: 
 Check("estimativa de fontes em pasta inexistente devolve 0",
       BuildProgressTracker.EstimateSourceCount("/nao/existe") == 0);
 
+// ---- comparacao de repositorio -------------------------------------------
+// Errar aqui e caro nos dois sentidos: um falso positivo esconde o core
+// incompativel e deixa o usuario perder uma compilacao inteira; um falso
+// negativo manda trocar o core sem necessidade, o que apaga o codigo-fonte.
+const string fork = "https://github.com/mod-playerbots/azerothcore-wotlk";
+const string forkAntigo = "https://github.com/liyunfan1223/azerothcore-wotlk";
+
+Check("repo identico", ModuleCatalog.SameRepository(fork, fork));
+Check("sufixo .git ignorado", ModuleCatalog.SameRepository(fork + ".git", fork));
+Check("barra final ignorada", ModuleCatalog.SameRepository(fork + "/", fork));
+Check("'.git/' junto ignorado", ModuleCatalog.SameRepository(fork + ".git/", fork));
+Check("espacos em volta ignorados", ModuleCatalog.SameRepository("  " + fork + ".git  ", fork));
+Check("caixa ignorada",
+      ModuleCatalog.SameRepository("https://github.com/Mod-Playerbots/AzerothCore-WotLK", fork));
+Check("url ssh reconhecida",
+      ModuleCatalog.SameRepository("git@github.com:mod-playerbots/azerothcore-wotlk.git", fork));
+Check("credencial embutida ignorada",
+      ModuleCatalog.SameRepository("https://user:token@github.com/mod-playerbots/azerothcore-wotlk.git", fork));
+Check("prefixo de proxy ignorado",
+      ModuleCatalog.SameRepository("http://proxy@127.0.0.1:8080/git/mod-playerbots/azerothcore-wotlk.git", fork));
+Check("core oficial e diferente do fork",
+      !ModuleCatalog.SameRepository("https://github.com/azerothcore/azerothcore-wotlk.git", fork));
+Check("outro dono e diferente",
+      !ModuleCatalog.SameRepository(forkAntigo, fork));
+Check("mesmo dono, repo diferente",
+      !ModuleCatalog.SameRepository("https://github.com/mod-playerbots/mod-playerbots", fork));
+
+// '.git' no meio do nome nao pode ser removido - so o sufixo conta
+Check("'.git' dentro do nome preservado",
+      ModuleCatalog.SameRepository("https://github.com/dono/repo.github.io",
+                                   "https://github.com/dono/repo.github.io"));
+Check("'.gitX' nao confunde com sufixo",
+      !ModuleCatalog.SameRepository("https://github.com/dono/repo.github.io",
+                                    "https://github.com/dono/repo"));
+
+// o Playerbots do catalogo tem que apontar mesmo para o fork
+var pb = ModuleCatalog.All.First(m => m.Name == "mod-playerbots");
+Check("Playerbots exige fork", pb.Status == ModuleStatus.ExigeFork);
+Check("Playerbots aponta para o fork",
+      pb.ForkRepository is not null && ModuleCatalog.SameRepository(pb.ForkRepository, fork),
+      pb.ForkRepository ?? "(nulo)");
+Check("branch do fork e Playerbot", pb.ForkBranch == "Playerbot", pb.ForkBranch ?? "(nulo)");
+
+// Um alias mal resolvido manda reclonar o core - operacao que apaga a pasta
+// de fontes inteira, modules/ junto. Falso positivo aqui e destrutivo.
+Check("fork canonico satisfaz", ModuleCatalog.SatisfiesFork(pb, fork));
+Check("fork canonico com .git satisfaz", ModuleCatalog.SatisfiesFork(pb, fork + ".git"));
+Check("endereco antigo do fork tambem satisfaz",
+      ModuleCatalog.SatisfiesFork(pb, forkAntigo));
+Check("endereco antigo com .git tambem satisfaz",
+      ModuleCatalog.SatisfiesFork(pb, forkAntigo + ".git"));
+Check("core oficial nao satisfaz o Playerbots",
+      !ModuleCatalog.SatisfiesFork(pb, "https://github.com/azerothcore/azerothcore-wotlk.git"));
+Check("repositorio do modulo nao serve como core",
+      !ModuleCatalog.SatisfiesFork(pb, pb.Repository));
+
+// modulo comum nao exige core nenhum
+var ahbot = ModuleCatalog.All.First(m => m.Name == "mod-ah-bot");
+Check("modulo sem fork aceita qualquer core",
+      ModuleCatalog.SatisfiesFork(ahbot, "https://github.com/azerothcore/azerothcore-wotlk.git"));
+
 Console.WriteLine($"\n{total - falhas}/{total} testes passaram (final)");
 return falhas == 0 ? 0 : 1;

@@ -397,6 +397,41 @@ function Get-FileCount {
     catch { return 0 }
 }
 
+function Get-EmptySubmodulePath {
+    <#
+        Devolve os caminhos de submodulo declarados no .gitmodules que existem
+        so como pasta vazia.
+
+        Um clone sem --recurse-submodules deixa exatamente esse estado: o modulo
+        parece instalado, mas o codigo da dependencia nao esta la. Foi assim que
+        o Eluna passou pela listagem e so falhou no meio da compilacao, com
+        "lua.h: No such file or directory".
+    #>
+    param([string]$ModulePath)
+
+    $arquivo = Join-Path $ModulePath '.gitmodules'
+    if (-not (Test-Path $arquivo)) { return @() }
+
+    $vazios = @()
+    foreach ($linha in (Get-Content $arquivo -ErrorAction SilentlyContinue)) {
+        # 'path = src/LuaEngine/lua'; o valor pode vir com espacos em volta
+        if ($linha -notmatch '^\s*path\s*=\s*(.+?)\s*$') { continue }
+
+        $relativo = $Matches[1]
+        $destino  = Join-Path $ModulePath ($relativo -replace '/', [IO.Path]::DirectorySeparatorChar)
+
+        if (-not (Test-Path $destino)) { $vazios += $relativo; continue }
+
+        try {
+            if (-not [IO.Directory]::EnumerateFileSystemEntries($destino).GetEnumerator().MoveNext()) {
+                $vazios += $relativo
+            }
+        } catch { }
+    }
+
+    return $vazios
+}
+
 function Invoke-ProcessWithProgress {
     <#
         Roda um executavel mostrando uma barra de progresso enquanto ele

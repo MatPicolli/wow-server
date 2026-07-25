@@ -19,10 +19,62 @@ public sealed record CatalogModule(
     ModuleStatus Status,
     string? PostInstallNote = null,
     string? ForkRepository = null,
-    string? ForkBranch = null);
+    string? ForkBranch = null)
+{
+    /// <summary>
+    /// Enderecos antigos que ainda apontam para o mesmo fork (o GitHub
+    /// redireciona repositorio que mudou de dono). Servem so para reconhecer um
+    /// core ja instalado; clone novo usa sempre <see cref="ForkRepository"/>.
+    /// </summary>
+    public IReadOnlyList<string> ForkAliases { get; init; } = Array.Empty<string>();
+}
 
 public static class ModuleCatalog
 {
+    /// <summary>
+    /// Diz se duas URLs apontam para o mesmo projeto, comparando so o final
+    /// "dono/repo".
+    /// <para>
+    /// A mesma origem aparece escrita de varias formas: https, ssh
+    /// (git@github.com:dono/repo.git), com credencial embutida, atras de um
+    /// proxy. Comparar a URL inteira acusaria "core incompativel" em todos
+    /// esses casos, com o modulo perfeitamente instalavel.
+    /// </para>
+    /// </summary>
+    public static bool SameRepository(string a, string b) =>
+        string.Equals(RepoTail(a), RepoTail(b), StringComparison.OrdinalIgnoreCase);
+
+    private static string RepoTail(string url)
+    {
+        // A barra final vem depois do .git ("...repo.git/"), entao ela sai
+        // antes - na ordem inversa o sufixo nao casa.
+        var limpo = url.Trim().TrimEnd('/');
+        if (limpo.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            limpo = limpo[..^4];
+        limpo = limpo.TrimEnd('/');
+
+        // O array explicito e obrigatorio: Split('/', ':', opcoes) compila, mas
+        // liga em Split(char, int, StringSplitOptions) - o ':' vira 'count' por
+        // conversao implicita de char para int, e a URL ssh nunca e separada.
+        var partes = limpo.Split(new[] { '/', ':' }, StringSplitOptions.RemoveEmptyEntries);
+        return partes.Length >= 2
+            ? partes[^2] + "/" + partes[^1]
+            : limpo;
+    }
+
+    /// <summary>
+    /// Diz se o core que esta instalado serve para este modulo de fork.
+    /// Aceita tambem os enderecos antigos do projeto: o Playerbots migrou de
+    /// conta pessoal para organizacao, e mandar reclonar o core por causa de um
+    /// redirecionamento do GitHub apagaria o codigo-fonte sem necessidade.
+    /// </summary>
+    public static bool SatisfiesFork(CatalogModule module, string coreRepository)
+    {
+        if (module.ForkRepository is null) return true;
+        if (SameRepository(module.ForkRepository, coreRepository)) return true;
+        return module.ForkAliases.Any(a => SameRepository(a, coreRepository));
+    }
+
     public static IReadOnlyList<CatalogModule> All { get; } = new[]
     {
         new CatalogModule(
@@ -88,7 +140,12 @@ public static class ModuleCatalog
                 "Este modulo so funciona sobre o fork correspondente. A GUI troca o "
                 + "repositorio de origem e reclona antes de compilar.",
             ForkRepository: "https://github.com/mod-playerbots/azerothcore-wotlk.git",
-            ForkBranch: "Playerbot"),
+            ForkBranch: "Playerbot")
+        {
+            // Endereco anterior a migracao para a organizacao. Ainda resolve, e
+            // quem clonou por ele tem o mesmo core - nao ha o que corrigir.
+            ForkAliases = new[] { "https://github.com/liyunfan1223/azerothcore-wotlk.git" },
+        },
     };
 
     public static CatalogModule? Find(string name) =>

@@ -174,11 +174,31 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 - Most modules have no root `CMakeLists.txt`; the core aggregates them. Don't
   use its presence to detect an installed module.
 - Some modules pull dependencies as git submodules — clone with
-  `--recurse-submodules`.
+  `--recurse-submodules`. A module cloned without it *looks* installed: the
+  directory is there, the submodule path is an empty folder, and the build dies
+  half an hour later with `lua.h: No such file or directory`.
+  `Get-EmptySubmodulePath` catches that up front; `rebuild.ps1` calls it.
 - Playerbots and NPCBots are **not modules**: each requires replacing the core
   with a fork. Installing them over the stock core produces dozens of `C2660`
   errors. Switching forks deletes the source tree, and `modules/` lives inside
-  it.
+  it. `rebuild.ps1` refuses to start a build in that state (`-Force` overrides),
+  because the failure otherwise costs a full compile to discover.
+- Playerbots moved from `liyunfan1223/*` to the `mod-playerbots` org. GitHub
+  redirects the old URLs, so a core cloned from either address is the same code.
+  `ModuleCatalog.SatisfiesFork` accepts both — treating the old one as "wrong
+  core" would trigger a reclone that **deletes the source tree**.
+
+**Comparing repository URLs**
+
+- The same origin appears as https, ssh (`git@github.com:owner/repo.git`), with
+  embedded credentials, or behind a proxy. Compare the `owner/repo` tail, not
+  the whole URL. Both implementations of this rule are tested:
+  `ModuleCatalog.SameRepository` (C#) and `Test-MesmoRepo` in `rebuild.ps1`.
+- Strip the trailing `/` **before** the `.git` suffix — `...repo.git/` leaves the
+  suffix unmatched in the other order.
+- `s.Split('/', ':', StringSplitOptions.RemoveEmptyEntries)` compiles but binds
+  to `Split(char, int, StringSplitOptions)`: `':'` converts implicitly to `int`
+  and becomes `count`. Pass `new[] { '/', ':' }`. This silently broke ssh URLs.
 
 **WPF**
 

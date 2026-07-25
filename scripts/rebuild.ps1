@@ -18,6 +18,10 @@
 .PARAMETER Start
     Sobe o servidor ao terminar.
 
+.PARAMETER Force
+    Compila mesmo com um modulo de fork sobre o core errado. So use se souber
+    exatamente o que esta fazendo - o normal e que a compilacao falhe.
+
 .EXAMPLE
     cd C:\AzerothCore\source\modules
     git clone https://github.com/azerothcore/mod-ah-bot.git
@@ -27,7 +31,8 @@
 [CmdletBinding()]
 param(
     [switch]$Clean,
-    [switch]$Start
+    [switch]$Start,
+    [switch]$Force
 )
 
 . "$PSScriptRoot\lib\common.ps1"
@@ -61,16 +66,108 @@ if (-not $modulos) {
             # Alguns modulos trazem dependencias como submodulo - o Eluna traz
             # a engine Lua assim. Sem inicializar, a compilacao morre com
             # "lua.h: No such file or directory".
-            if (Test-Path (Join-Path $mod.FullName '.gitmodules')) {
+            $gitmodules = Join-Path $mod.FullName '.gitmodules'
+            if (Test-Path $gitmodules) {
                 Write-Info "$($mod.Name): sincronizando submodulos"
+
+                # 2>&1 sob ErrorActionPreference='Stop' transforma stderr em erro
+                # terminante antes de podermos ler $LASTEXITCODE - por isso a
+                # preferencia e relaxada so aqui.
+                $saidaSub = ''
+                $codigoSub = 0
                 try {
-                    git -C $mod.FullName submodule update --init --recursive 2>&1 | Out-Null
+                    $anterior = $ErrorActionPreference
+                    $ErrorActionPreference = 'Continue'
+                    $saidaSub = (git -C $mod.FullName submodule update --init --recursive 2>&1 | Out-String).Trim()
+                    $codigoSub = $LASTEXITCODE
                 } catch {
+                    $codigoSub = 1
+                    $saidaSub = "$_"
+                } finally {
+                    $ErrorActionPreference = $anterior
+                }
+
+                # Falha silenciosa aqui custa uma compilacao inteira: o modulo
+                # aparece instalado, mas o codigo da dependencia nao esta la e o
+                # erro so surge 20 minutos depois como "lua.h: No such file".
+                if ($codigoSub -ne 0) {
                     Write-Warn "nao consegui atualizar os submodulos de $($mod.Name)"
+                    foreach ($linha in ($saidaSub -split "`r?`n")) {
+                        if ($linha.Trim()) { Write-Info "  $linha" }
+                    }
+                }
+
+                foreach ($vazio in (Get-EmptySubmodulePath $mod.FullName)) {
+                    Write-Warn "$($mod.Name): a dependencia '$vazio' esta vazia - a compilacao vai falhar"
+                    Write-Info  "  para resolver: git -C `"$($mod.FullName)`" submodule update --init --recursive"
                 }
             }
         }
         Write-Ok ("{0,-32} {1}" -f $mod.Name, $rev)
+    }
+}
+
+# --- modulo de fork sobre o core errado ------------------------------------
+# mod-playerbots e mod-ah-bot-style forks compilam contra simbolos que so
+# existem no fork. Sobre o core oficial isso rende centenas de C2660/C2039 -
+# duas compilacoes perdidas ate esta checagem existir.
+# O primeiro endereco e o canonico (usado nas mensagens); os demais sao nomes
+# antigos que o GitHub redireciona - o Playerbots migrou de conta pessoal para
+# organizacao, e quem clonou pelo endereco velho tem exatamente o mesmo core.
+$forks = @{
+    'mod-playerbots' = @(
+        'https://github.com/mod-playerbots/azerothcore-wotlk'
+        'https://github.com/liyunfan1223/azerothcore-wotlk'
+    )
+}
+
+$origemCore = ''
+if (Test-Path (Join-Path $settings.SourceDir '.git')) {
+    try { $origemCore = (git -C $settings.SourceDir remote get-url origin 2>$null | Out-String).Trim() } catch { }
+}
+
+function Test-MesmoRepo {
+    <#
+        Compara so o final 'dono/repo' da URL, nao a URL inteira.
+
+        A mesma origem aparece escrita de varias formas - https, ssh
+        (git@github.com:dono/repo.git), com credencial embutida, atras de um
+        proxy corporativo. Comparar a URL crua acusaria core errado em todos
+        esses casos e travaria uma compilacao perfeitamente valida.
+
+        A barra final vem depois do .git ('...repo.git/'), entao ela sai antes -
+        na ordem inversa o sufixo nao casa.
+    #>
+    param([string]$A, [string]$B)
+
+    $n = {
+        param($u)
+        $limpo = ($u.Trim().TrimEnd('/')) -replace '\.git$', ''
+        $partes = $limpo.TrimEnd('/') -split '[/:]' | Where-Object { $_ }
+        if ($partes.Count -ge 2) {
+            return (($partes[-2] + '/' + $partes[-1])).ToLowerInvariant()
+        }
+        return $limpo.ToLowerInvariant()
+    }
+
+    return (& $n $A) -eq (& $n $B)
+}
+
+foreach ($nome in $forks.Keys) {
+    if (-not ($modulos | Where-Object { $_.Name -eq $nome })) { continue }
+    if (-not $origemCore) { continue }
+
+    $aceitos = @($forks[$nome])
+    $serve = $false
+    foreach ($url in $aceitos) { if (Test-MesmoRepo $origemCore $url) { $serve = $true; break } }
+    if ($serve) { continue }
+
+    $msg = "$nome exige o core de $($aceitos[0]), mas o codigo em $($settings.SourceDir) veio de $origemCore"
+    if ($Force) {
+        Write-Warn $msg
+        Write-Warn '-Force: seguindo mesmo assim, a compilacao provavelmente vai falhar'
+    } else {
+        Write-Fail $msg 'na GUI, aba Modulos, use o botao "Corrigir o core" no card do Playerbots (ou rode de novo com -Force)'
     }
 }
 
