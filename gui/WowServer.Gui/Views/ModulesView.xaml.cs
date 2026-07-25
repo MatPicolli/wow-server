@@ -380,15 +380,19 @@ public partial class ModulesView : UserControl
                 $"{modulo.DisplayName} não é um módulo comum: ele exige substituir o "
                 + "código do servidor por uma versão modificada.\n\n"
                 + "O que acontece:\n"
+                + "  • é feito um backup do banco automaticamente, antes de tudo\n"
                 + "  • o código-fonte é apagado e clonado de novo\n"
-                + "  • a compilação é refeita (cerca de 20 minutos no total)\n\n"
-                + "  • os outros módulos instalados são reinstalados automaticamente,\n"
-                + "    porque a pasta de módulos vive dentro do código-fonte\n\n"
+                + "  • os outros módulos instalados são reinstalados sozinhos,\n"
+                + "    porque a pasta de módulos vive dentro do código-fonte\n"
+                + "  • depois você clica em Recompilar (cerca de 20 minutos)\n\n"
                 + "O que é preservado:\n"
                 + "  • os dados extraídos do seu WoW (as horas de extração NÃO se repetem)\n"
-                + "  • seus personagens e contas\n\n"
-                + "Faça um backup antes. Continuar?",
-                "Isso troca o servidor inteiro", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                + "  • seus personagens e contas\n"
+                + "  • suas configurações\n\n"
+                + "Dá para ver o que vai acontecer, sem alterar nada, rodando antes:\n"
+                + "    .\\scripts\\switch-core.ps1 -Playerbots\n\n"
+                + "Continuar?",
+                "Isso troca o código do servidor", MessageBoxButton.YesNo, MessageBoxImage.Warning);
 
             if (aviso != MessageBoxResult.Yes) return;
 
@@ -418,94 +422,68 @@ public partial class ModulesView : UserControl
         Saida.Append("==> agora use 'Recompilar' para o módulo entrar no servidor");
     }
 
+    /// <summary>
+    /// Troca o core pelo fork que o modulo exige.
+    ///
+    /// Tudo que decide o que apagar, o que preservar e quais modulos reclonar
+    /// mora em switch-core.ps1, nao aqui. Isso vale para os dois caminhos: quem
+    /// nao usa a GUI roda o mesmo script e obtem o mesmo resultado, e uma
+    /// correcao beneficia os dois.
+    /// </summary>
     /// <returns>true se o core ficou pronto para receber o modulo.</returns>
     private async Task<bool> TrocarParaForkAsync(CatalogModule modulo)
     {
         if (modulo.ForkRepository is null || modulo.ForkBranch is null) return true;
 
-        // Trocar o core apaga a pasta de fontes inteira, e modules/ mora
-        // dentro dela. Anotamos a origem de cada modulo instalado agora para
-        // reinstalar depois - senao eles somem sem aviso.
-        var instalados = await ListarInstaladosAsync();
-        if (instalados.Count > 0)
-            Saida.Append($"==> {instalados.Count} módulo(s) serão reinstalados após a troca");
-
-        var cfg = Session.Current.Loaded ?? await Session.Current.Settings.LoadAsync();
-        cfg.SourceRepository = modulo.ForkRepository;
-        cfg.SourceBranch = modulo.ForkBranch;
-
-        try
+        if (!_runner.ScriptExists("switch-core.ps1"))
         {
-            Session.Current.Settings.Save(cfg);
-        }
-        catch (Exception ex)
-        {
-            Saida.Append($"[erro] não consegui gravar as configurações: {ex.Message}", OutputKind.Error);
+            Saida.Append("[erro] scripts\\switch-core.ps1 não encontrado — atualize o repositório", OutputKind.Error);
             return false;
         }
-        Session.Current.Loaded = cfg;
 
-        Saida.Append($"==> origem trocada para {modulo.ForkBranch} @ {modulo.ForkRepository}");
+        var progresso = new BuildProgressTracker();
+        void AoSair(OutputLine linha) => progresso.Feed(linha.Text);
+        _runner.Output += AoSair;
 
-        var codigo = await _runner.RunAsync("02-clone-source.ps1", new[] { "-Force" });
+        int codigo;
+        try
+        {
+            // -NoBuild: a compilacao vem depois, com a barra de progresso da
+            // tela. Deixar o script compilar aqui esconderia o andamento.
+            codigo = await _runner.RunAsync("switch-core.ps1", new[]
+            {
+                "-Repository", modulo.ForkRepository,
+                "-Branch", modulo.ForkBranch,
+                "-Apply",
+                "-NoBuild",
+            });
+        }
+        finally
+        {
+            _runner.Output -= AoSair;
+        }
+
         if (codigo != 0)
         {
             Saida.Append($"[erro] a troca do core falhou (código {codigo})", OutputKind.Error);
-            Saida.Append("       o módulo NÃO foi instalado - sobre o core errado ele não compila", OutputKind.Error);
+            if (progresso.FirstFailure is not null)
+                Saida.Append("       " + progresso.FirstFailure, OutputKind.Error);
+            Saida.Append("       o módulo NÃO foi instalado — sobre o core errado ele não compila", OutputKind.Error);
             return false;
         }
 
-        foreach (var (nome, url) in instalados)
+        // O script gravou o settings.psd1; a sessao ainda tem o valor antigo em
+        // memoria, e sem recarregar o card continuaria acusando core errado.
+        try
         {
-            if (string.Equals(nome, modulo.Name, StringComparison.OrdinalIgnoreCase)) continue;
-            Saida.Append($"==> reinstalando {nome}");
-            await RodarGitAsync(new[] { "clone", "--recurse-submodules", url, Path.Combine(ModulesDir, nome) });
+            Session.Current.Loaded = await Session.Current.Settings.LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Saida.Append($"[aviso] não consegui reler as configurações: {ex.Message}");
         }
 
         return true;
-    }
-
-    /// <summary>Nome e URL de origem de cada modulo instalado agora.</summary>
-    private async Task<List<(string Nome, string Url)>> ListarInstaladosAsync()
-    {
-        var lista = new List<(string, string)>();
-        if (!Directory.Exists(ModulesDir)) return lista;
-
-        foreach (var dir in Directory.GetDirectories(ModulesDir))
-        {
-            if (!Directory.Exists(Path.Combine(dir, ".git"))) continue;
-
-            var url = await CapturarGitAsync(new[] { "-C", dir, "remote", "get-url", "origin" });
-            if (!string.IsNullOrWhiteSpace(url))
-                lista.Add((Path.GetFileName(dir), url.Trim()));
-        }
-        return lista;
-    }
-
-    private static async Task<string> CapturarGitAsync(string[] argumentos)
-    {
-        var psi = new ProcessStartInfo
-        {
-            FileName = "git",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in argumentos) psi.ArgumentList.Add(a);
-
-        try
-        {
-            using var p = Process.Start(psi);
-            if (p is null) return string.Empty;
-            var saida = await p.StandardOutput.ReadToEndAsync();
-            await p.WaitForExitAsync();
-            return p.ExitCode == 0 ? saida : string.Empty;
-        }
-        catch
-        {
-            return string.Empty;
-        }
     }
 
     private async Task ClonarAsync(CatalogModule modulo)

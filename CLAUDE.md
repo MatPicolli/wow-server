@@ -36,6 +36,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\rebuild.ps1                 # build -> deploy -> configure, after adding/removing modules
 .\scripts\backup-db.ps1               # safe to run against a live server
 .\scripts\repair-settings.ps1         # recover a settings.psd1 with duplicate keys
+.\scripts\switch-core.ps1 -Playerbots # swap the core for a fork; preview, then -Apply
 ```
 
 Numbered scripts `00`–`08` are the install pipeline and are individually
@@ -126,6 +127,12 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   `$LASTEXITCODE`; otherwise it carries the last native command's value.
 - Splatting needs `@variable`. `@($hash.Args)` builds an array and passes the
   hashtable positionally.
+- A function returning an empty array yields **`$null`**, because the pipeline
+  unrolls it. `return ,@($items)` — the leading comma is load-bearing, and
+  without it a caller doing `.Count` fails under StrictMode.
+- Writing to `settings.psd1` from PowerShell goes through `Set-ServerSetting`,
+  which preserves comments, validates by parsing a temp copy first, and refuses
+  to write if the result would contain duplicate keys.
 
 **Process handling**
 

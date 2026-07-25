@@ -409,8 +409,9 @@ function Get-EmptySubmodulePath {
     #>
     param([string]$ModulePath)
 
+    # ',' em todo return: sem ela, um array vazio vira $null na saida da funcao.
     $arquivo = Join-Path $ModulePath '.gitmodules'
-    if (-not (Test-Path $arquivo)) { return @() }
+    if (-not (Test-Path $arquivo)) { return ,@() }
 
     $vazios = @()
     foreach ($linha in (Get-Content $arquivo -ErrorAction SilentlyContinue)) {
@@ -429,7 +430,7 @@ function Get-EmptySubmodulePath {
         } catch { }
     }
 
-    return $vazios
+    return ,@($vazios)
 }
 
 function Invoke-ProcessWithProgress {
@@ -526,6 +527,107 @@ function Write-TextFileNoBom {
     )
     $utf8NoBom = New-Object Text.UTF8Encoding($false)
     [IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
+function Get-Psd1DuplicateKey {
+    <#
+        Chaves declaradas mais de uma vez no mesmo nivel do arquivo.
+
+        Import-PowerShellDataFile recusa um psd1 com chave repetida, e todo o
+        resto dos scripts para de funcionar junto. Ja aconteceu: uma substituicao
+        que nao casava acabou anexando cada chave em vez de trocar.
+    #>
+    param([Parameter(Mandatory)][string]$Text)
+
+    $contagem = @{}
+    foreach ($linha in ($Text -split "`r?`n")) {
+        if ($linha -match "^\s*(?<k>[A-Za-z_][A-Za-z0-9_]*)\s*=") {
+            $k = $Matches['k']
+            if ($contagem.ContainsKey($k)) { $contagem[$k]++ } else { $contagem[$k] = 1 }
+        }
+    }
+
+    # A virgula nao e enfeite: devolver @() de uma funcao entrega $null, porque
+    # o pipeline desenrola o array vazio. Com ',' o array sai inteiro, e o
+    # chamador pode ler .Count sem se preocupar.
+    return ,@($contagem.Keys | Where-Object { $contagem[$_] -gt 1 } | Sort-Object)
+}
+
+function Set-ServerSetting {
+    <#
+        Troca o valor de uma chave em config/settings.psd1, preservando os
+        comentarios - o arquivo e feito para ser lido e editado a mao, entao
+        regerar tudo destruiria a parte mais util dele.
+
+        Cuidados que este codigo carrega, todos por bug ja visto:
+
+        * O ancora '$' em modo multiline casa ANTES do \n e deixa o \r do CRLF
+          de fora. Um padrao terminado em '$' simplesmente nao casa em arquivo
+          escrito no Windows - e ai a chave era anexada no fim em vez de
+          substituida, produzindo duplicatas que o Import-PowerShellDataFile
+          rejeita. Por isso o final e (?=\r?\n|$).
+        * A gravacao passa por Write-TextFileNoBom: BOM quebra o parser.
+        * Antes de gravar, o resultado e validado. Melhor falhar aqui do que
+          deixar o arquivo ilegivel para todos os outros scripts.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Key,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Value,
+        [string]$Path
+    )
+
+    if (-not $Path) { $Path = Join-Path $AcRepoDir 'config\settings.psd1' }
+    if (-not (Test-Path $Path)) { Write-Fail "nao achei $Path" }
+
+    $texto = [IO.File]::ReadAllText($Path)
+
+    # Aspas simples no PowerShell: o unico escape e dobrar a aspa.
+    $literal = "'" + ($Value -replace "'", "''") + "'"
+
+    $padrao = '(?m)^(?<lead>[ \t]*' + [regex]::Escape($Key) + '[ \t]*=[ \t]*)' +
+              '(?<val>''(?:[^'']|'''')*''|"(?:[^"]|"")*"|[^\s#]*)' +
+              '(?<tail>[ \t]*(?:#[^\r\n]*)?)(?=\r?\n|$)'
+
+    $re = [regex]::new($padrao)
+    $achados = $re.Matches($texto)
+
+    if ($achados.Count -gt 1) {
+        Write-Fail "a chave '$Key' aparece $($achados.Count) vezes em $Path." `
+                   'Rode .\scripts\repair-settings.ps1 antes.'
+    }
+
+    if ($achados.Count -eq 1) {
+        $novo = $re.Replace($texto, { param($m)
+            $m.Groups['lead'].Value + $literal + $m.Groups['tail'].Value
+        }, 1)
+    } else {
+        # Chave ausente e normal: varias sao opcionais e ganham default no
+        # Import-ServerSettings. Entra antes da chave de fechamento.
+        $fecha = $texto.LastIndexOf('}')
+        if ($fecha -lt 0) { Write-Fail "$Path nao parece um psd1 valido (sem '}')." }
+
+        $quebra = if ($texto -match "`r`n") { "`r`n" } else { "`n" }
+        $novo = $texto.Substring(0, $fecha) + "    $Key = $literal$quebra" + $texto.Substring($fecha)
+    }
+
+    $duplicadas = Get-Psd1DuplicateKey -Text $novo
+    if ($duplicadas.Count -gt 0) {
+        Write-Fail "a alteracao criaria chave repetida: $($duplicadas -join ', ')." `
+                   'Nada foi gravado.'
+    }
+
+    # Validar de verdade: parsear antes de sobrescrever o arquivo bom.
+    $temp = [IO.Path]::GetTempFileName()
+    try {
+        Write-TextFileNoBom -Path $temp -Content $novo
+        $null = Import-PowerShellDataFile -Path $temp
+    } catch {
+        Remove-Item $temp -Force -ErrorAction SilentlyContinue
+        Write-Fail "a alteracao deixaria $Path ilegivel: $_" 'Nada foi gravado.'
+    }
+    Remove-Item $temp -Force -ErrorAction SilentlyContinue
+
+    Write-TextFileNoBom -Path $Path -Content $novo
 }
 
 function New-DirectoryIfMissing {
