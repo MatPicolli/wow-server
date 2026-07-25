@@ -282,8 +282,15 @@ function Invoke-MySql {
         "--user=$User"
         "--protocol=TCP"
     )
-    if ($Password) { $mysqlArgs += "--password=$Password" }
     if ($Database) { $mysqlArgs += $Database }
+
+    # A senha vai por MYSQL_PWD em vez de --password. Com --password o cliente
+    # imprime "[Warning] Using a password on the command line interface can be
+    # insecure." no stderr toda vez, o que sujava a saida e se misturava com
+    # erros de verdade. De quebra, a senha deixa de aparecer na linha de
+    # comando do processo.
+    $prevPwd = $env:MYSQL_PWD
+    if ($Password) { $env:MYSQL_PWD = $Password }
 
     # Com $ErrorActionPreference = 'Stop', o '2>&1' de um comando nativo faz o
     # PowerShell transformar cada linha de stderr em excecao na hora - antes de
@@ -303,9 +310,18 @@ function Invoke-MySql {
         $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $prevEap
+        $env:MYSQL_PWD = $prevPwd
     }
 
-    $text = ($out | Out-String).Trim()
+    # Cada linha de stderr vira um ErrorRecord. Passar isso por Out-String
+    # renderiza com toda a decoracao do PowerShell (posicao no arquivo, o
+    # trecho de codigo, CategoryInfo...), enterrando a mensagem do MySQL no
+    # meio de ruido. Convertendo cada um pro texto puro, sobra so o que
+    # interessa.
+    $text = (@($out) | ForEach-Object {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { $_ }
+    }) -join [Environment]::NewLine
+    $text = $text.Trim()
 
     if ($code -ne 0) {
         if ($text) {

@@ -262,16 +262,22 @@ SELECT COUNT(*) AS Linhas,
 "@
     Write-Host $preview -ForegroundColor Gray
 
+    # Agrupado por nome com TUDO agregado: o MySQL 8 vem com
+    # sql_mode=only_full_group_by por padrao e rejeita coluna nao-agregada
+    # fora do GROUP BY. (O MariaDB aceita, o que esconde o problema.)
     $exemplos = Invoke-World -Sql @"
-SELECT it2.name AS Item, b.MinCount AS DeMin, b.MaxCount AS DeMax,
-       LEAST($MaxStack, GREATEST(1, ROUND(b.MinCount * $($p.Rate)))) AS ParaMin,
-       LEAST($MaxStack, GREATEST(1, ROUND(b.MaxCount * $($p.Rate)))) AS ParaMax
+SELECT it2.name AS Item,
+       MIN(b.MinCount) AS DeMin,
+       MAX(b.MaxCount) AS DeMax,
+       LEAST($MaxStack, GREATEST(1, ROUND(MIN(b.MinCount) * $($p.Rate)))) AS ParaMin,
+       LEAST($MaxStack, GREATEST(1, ROUND(MAX(b.MaxCount) * $($p.Rate)))) AS ParaMax
   FROM ``$($p.Table)`` t
   JOIN ``$backup`` b ON b.LootTable = '$($p.Table)' AND b.Entry = t.Entry AND b.Item = t.Item
   $join
   JOIN item_template it2 ON it2.entry = t.Item
  WHERE $($p.Where)
- GROUP BY t.Item
+ GROUP BY it2.name
+ ORDER BY DeMax DESC
  LIMIT 5;
 "@
     Write-Info 'exemplos:'

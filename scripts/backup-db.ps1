@@ -60,7 +60,6 @@ $dumpArgs = @(
     "--host=$($m.Host)"
     "--port=$($m.Port)"
     "--user=$($m.User)"
-    "--password=$($m.Password)"
     '--protocol=TCP'
     '--single-transaction'      # retrato consistente sem travar o servidor
     '--routines'
@@ -76,6 +75,11 @@ $dumpArgs = @(
 # Mesmo cuidado do Invoke-MySql: com $ErrorActionPreference = 'Stop', o stderr
 # de um comando nativo vira excecao antes de conseguirmos ler o exit code, e a
 # mensagem real se perde.
+# Senha por MYSQL_PWD: com --password o cliente avisa no stderr que isso e
+# inseguro, toda vez, sujando a saida.
+$prevPwd = $env:MYSQL_PWD
+if ($m.Password) { $env:MYSQL_PWD = $m.Password }
+
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 $code = -1
@@ -84,6 +88,7 @@ try {
     $code = $LASTEXITCODE
 } finally {
     $ErrorActionPreference = $prevEap
+    $env:MYSQL_PWD = $prevPwd
 }
 
 $erros = ''
