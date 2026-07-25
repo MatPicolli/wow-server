@@ -42,19 +42,36 @@ public sealed class ServerController : IDisposable
     }
 
     /// <summary>
-    /// Desligamento limpo: pede ao worldserver que salve e encerre. Matar o
-    /// processo perde o que ainda nao foi gravado no banco.
+    /// Monta o comando de desligamento do worldserver.
+    ///
+    /// O core rejeita atraso zero - em cs_server.cpp, 'delay &lt;= 0' devolve
+    /// LANG_BAD_VALUE ("Incorrect values.") e nada acontece. Por isso o
+    /// minimo aqui e 1 segundo, que na pratica e imediato e ainda passa pelo
+    /// caminho normal de salvamento.
     /// </summary>
-    public void StopAll(int shutdownDelaySeconds = 0)
+    public static string BuildShutdownCommand(int seconds) =>
+        $"server shutdown {Math.Max(1, seconds)}";
+
+    /// <summary>
+    /// Desligamento limpo: pede ao worldserver que salve e encerre.
+    /// </summary>
+    public void StopAll(int shutdownDelaySeconds = 1)
     {
         if (WorldRunning)
         {
-            try { SendWorldCommand($"server shutdown {shutdownDelaySeconds}"); }
+            try { SendWorldCommand(BuildShutdownCommand(shutdownDelaySeconds)); }
             catch { /* se ja caiu, segue */ }
         }
+
         if (AuthRunning)
         {
-            try { _auth!.CloseMainWindow(); } catch { }
+            // O authserver roda sem janela (CreateNoWindow), entao
+            // CloseMainWindow nao tem o que fechar e simplesmente nao faz
+            // nada. Encerrar o processo e seguro: ele nao acumula estado -
+            // conta e sessao vao para o banco no momento do login. Quem tem
+            // dado em memoria e o worldserver, e esse sai pelo caminho limpo
+            // acima.
+            try { _auth!.Kill(entireProcessTree: true); } catch { }
         }
     }
 

@@ -64,6 +64,7 @@ IDs de itens: <https://www.wowhead.com/wotlk/items> — o número está na URL.
 .server info
 .announce Reiniciando em 5 minutos
 .server shutdown 300    # desliga em 300s, salvando tudo
+.server shutdown 1      # desliga já (o mínimo é 1; com 0 dá "Incorrect values.")
 .saveall
 ```
 

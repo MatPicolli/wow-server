@@ -116,7 +116,13 @@ public partial class ServerView : UserControl
     private void Parar_Click(object sender, RoutedEventArgs e)
     {
         PainelWorld.Append("> desligando (salvando personagens)");
+        PainelAuth.Append("> encerrando o authserver");
+
         _servidor?.StopAll();
+
+        // Evita clique repetido enquanto o desligamento acontece; os botoes
+        // voltam ao normal quando os dois processos avisarem que sairam.
+        BtnParar.IsEnabled = false;
     }
 
     private void Matar_Click(object sender, RoutedEventArgs e)

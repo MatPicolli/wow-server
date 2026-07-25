@@ -164,6 +164,20 @@ Check("presets existem", TuningPresets.All.Count >= 3);
 Check("preset Blizzlike e neutro",
       TuningPresets.All[0].Gathering.IsEmpty && TuningPresets.All[0].Drops.IsEmpty);
 
+// -------------------------------------------------------------- shutdown ---
+Console.WriteLine("\n=== ServerController: comando de desligamento ===");
+
+// cs_server.cpp rejeita delay <= 0 com "Incorrect values." e nao desliga nada.
+Check("atraso 0 vira 1 (o core rejeita zero)",
+      ServerController.BuildShutdownCommand(0) == "server shutdown 1",
+      ServerController.BuildShutdownCommand(0));
+Check("atraso negativo tambem vira 1",
+      ServerController.BuildShutdownCommand(-5) == "server shutdown 1",
+      ServerController.BuildShutdownCommand(-5));
+Check("atraso valido e preservado",
+      ServerController.BuildShutdownCommand(300) == "server shutdown 300",
+      ServerController.BuildShutdownCommand(300));
+
 // ---------------------------------------------------------------- tailer ---
 Console.WriteLine("\n=== LogTailer: leitura de log em uso ===");
 
