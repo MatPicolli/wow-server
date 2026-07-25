@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    net8.0 de proposito: toda a logica que nao depende de WPF fica aqui, num
+    alvo que compila e roda em qualquer plataforma - inclusive em CI Linux.
+    O projeto de GUI (net10.0-windows) referencia este normalmente.
+    Se preferir tudo em .NET 10, basta trocar o TargetFramework abaixo.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+</Project>

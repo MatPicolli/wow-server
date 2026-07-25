@@ -1,0 +1,120 @@
+<UserControl x:Class="WowServer.Gui.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24" MaxWidth="720" HorizontalAlignment="Left">
+
+            <TextBlock Text="Configurações avançadas" Style="{StaticResource Titulo}" />
+            <TextBlock Style="{StaticResource Subtitulo}"
+                       Text="Grava direto no config/settings.psd1, preservando os comentários do arquivo. Mudanças de banco e de pastas só valem no próximo start do servidor." />
+
+            <Border Background="{StaticResource BgPanel}" BorderBrush="{StaticResource Border}"
+                    BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Repositório detectado" Foreground="{StaticResource TextDim}" FontSize="11" />
+                    <TextBlock x:Name="TxtRepo" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <GroupBox Header="Pastas">
+                <StackPanel>
+                    <TextBlock Text="Client do WoW (a pasta que contém Wow.exe)" Margin="0,0,0,4" />
+                    <DockPanel Margin="0,0,0,10">
+                        <Button DockPanel.Dock="Right" Content="Procurar..." Margin="8,0,0,0" Click="EscolherClient_Click" />
+                        <TextBox x:Name="TxtClient" />
+                    </DockPanel>
+
+                    <TextBlock Text="Raiz da instalação" Margin="0,0,0,4" />
+                    <TextBox x:Name="TxtRoot" Margin="0,0,0,10" />
+
+                    <TextBlock Text="Código-fonte" Margin="0,0,0,4" />
+                    <TextBox x:Name="TxtSource" Margin="0,0,0,10" />
+
+                    <TextBlock Text="Compilação" Margin="0,0,0,4" />
+                    <TextBox x:Name="TxtBuild" Margin="0,0,0,10" />
+
+                    <TextBlock Text="Servidor pronto" Margin="0,0,0,4" />
+                    <TextBox x:Name="TxtServer" />
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Banco de dados">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="160" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Servidor MySQL" Margin="0,7" />
+                    <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtHost" Margin="0,4" />
+
+                    <TextBlock Grid.Row="1" Text="Porta" Margin="0,7" />
+                    <TextBox   Grid.Row="1" Grid.Column="1" x:Name="TxtPort" Margin="0,4" />
+
+                    <TextBlock Grid.Row="2" Text="Usuário" Margin="0,7" />
+                    <TextBox   Grid.Row="2" Grid.Column="1" x:Name="TxtUser" Margin="0,4" />
+
+                    <TextBlock Grid.Row="3" Text="Senha" Margin="0,7" />
+                    <TextBox   Grid.Row="3" Grid.Column="1" x:Name="TxtPass" Margin="0,4" />
+
+                    <TextBlock Grid.Row="4" Text="Banco de contas" Margin="0,7" />
+                    <TextBox   Grid.Row="4" Grid.Column="1" x:Name="TxtAuthDb" Margin="0,4" />
+
+                    <TextBlock Grid.Row="5" Text="Banco de mundo" Margin="0,7" />
+                    <TextBox   Grid.Row="5" Grid.Column="1" x:Name="TxtWorldDb" Margin="0,4" />
+
+                    <TextBlock Grid.Row="6" Text="Banco de personagens" Margin="0,7" />
+                    <TextBox   Grid.Row="6" Grid.Column="1" x:Name="TxtCharDb" Margin="0,4" />
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Header="Realm">
+                <StackPanel>
+                    <TextBlock Text="Nome do servidor" Margin="0,0,0,4" />
+                    <TextBox x:Name="TxtRealmName" Margin="0,0,0,10" />
+
+                    <TextBlock Text="Endereço que o client usa" Margin="0,0,0,4" />
+                    <TextBox x:Name="TxtRealmAddr" />
+                    <TextBlock Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
+                               Text="127.0.0.1 para jogar só nesta máquina. Para jogar de outro PC da rede, use o IP local desta máquina." />
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Código-fonte do servidor">
+                <StackPanel>
+                    <TextBlock Text="Repositório" Margin="0,0,0,4" />
+                    <TextBox x:Name="TxtSourceRepo" Margin="0,0,0,10" />
+                    <TextBlock Text="Branch" Margin="0,0,0,4" />
+                    <TextBox x:Name="TxtSourceBranch" />
+                    <TextBlock Foreground="{StaticResource Warn}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
+                               Text="Trocar aqui exige clonar de novo e recompilar. A aba Módulos faz isso automaticamente ao instalar um módulo que precise." />
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Compilação e extração">
+                <StackPanel>
+                    <TextBlock Text="Threads (0 = todos os núcleos)" Margin="0,0,0,4" />
+                    <TextBox x:Name="TxtThreads" Margin="0,0,0,10" />
+                    <CheckBox x:Name="ChkVmaps" Content="Extrair vmaps (linha de visão — sem isso mobs enxergam através de parede)" />
+                    <CheckBox x:Name="ChkMmaps" Content="Extrair mmaps (navegação — sem isso mobs andam em linha reta)" />
+                </StackPanel>
+            </GroupBox>
+
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,24">
+                <Button Content="Salvar" Style="{StaticResource BotaoPrincipal}" Click="Salvar_Click" />
+                <Button Content="Recarregar" Click="Recarregar_Click" />
+                <Button Content="Abrir o arquivo" Click="AbrirArquivo_Click" />
+                <Button Content="Fazer backup do banco" Click="Backup_Click" />
+            </StackPanel>
+
+            <TextBlock x:Name="TxtStatus" Foreground="{StaticResource Ok}" FontSize="12" Margin="0,0,0,20" />
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,96 @@
+<UserControl x:Class="WowServer.Gui.Views.TuningView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:WowServer.Gui.Views">
+    <Grid Margin="24">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="420" />
+            <ColumnDefinition Width="14" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="Ajustes de jogo" Style="{StaticResource Titulo}" />
+                <TextBlock Style="{StaticResource Subtitulo}"
+                           Text="Multiplicadores aplicados sobre os valores originais, que ficam guardados. Aplicar 3x duas vezes continua sendo 3x, e dá pra voltar ao original a qualquer momento." />
+
+                <GroupBox Header="Perfis prontos">
+                    <StackPanel x:Name="Perfis" />
+                </GroupBox>
+
+                <GroupBox Header="Quanto vem de cada coleta">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="70" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Mineração" Margin="0,5" />
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtMining" Text="1" Margin="0,3" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Herbalismo" Margin="0,5" />
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="TxtHerb" Text="1" Margin="0,3" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Pesca" Margin="0,5" />
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="TxtFish" Text="1" Margin="0,3" />
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Esfolamento" Margin="0,5" />
+                            <TextBox   Grid.Row="3" Grid.Column="1" x:Name="TxtSkin" Text="1" Margin="0,3" />
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Desencantar" Margin="0,5" />
+                            <TextBox   Grid.Row="4" Grid.Column="1" x:Name="TxtDisench" Text="1" Margin="0,3" />
+
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Moagem" Margin="0,5" />
+                            <TextBox   Grid.Row="5" Grid.Column="1" x:Name="TxtMill" Text="1" Margin="0,3" />
+
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Prospecção" Margin="0,5" />
+                            <TextBox   Grid.Row="6" Grid.Column="1" x:Name="TxtProsp" Text="1" Margin="0,3" />
+                        </Grid>
+                        <TextBlock Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap"
+                                   Margin="0,10,0,0"
+                                   Text="1 = sem alteração. O teto por item é 255 (limite do banco); valores muito altos são limitados e o preview avisa." />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Chance de drop">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="70" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Itens de quest" Margin="0,5" />
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="TxtQuest" Text="1" Margin="0,3" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Loot comum de criatura" Margin="0,5" />
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="TxtCreature" Text="1" Margin="0,3" />
+                        </Grid>
+                        <TextBlock Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap"
+                                   Margin="0,10,0,0"
+                                   Text="Chance é porcentagem, limitada a 100. Itens de quest resolvem o clássico 'mate 10 e colete 3'. Mexer no loot comum afeta o jogo inteiro." />
+                    </StackPanel>
+                </GroupBox>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,20">
+                    <Button Content="Ver o que mudaria" Click="Preview_Click" />
+                    <Button Content="Aplicar" Style="{StaticResource BotaoPrincipal}" Click="Aplicar_Click" />
+                    <Button Content="Restaurar original" Click="Reset_Click" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <v:ConsolePane x:Name="Saida" Grid.Column="2" />
+    </Grid>
+</UserControl>

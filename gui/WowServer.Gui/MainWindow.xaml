@@ -1,0 +1,108 @@
+<Window x:Class="WowServer.Gui.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="clr-namespace:WowServer.Gui.Views"
+        Title="Servidor de WoW — Gerenciador" Height="880" Width="1440"
+        MinHeight="640" MinWidth="1100"
+        Background="{StaticResource Bg}"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <!-- Navegação lateral: aba com aparência de item de menu -->
+        <Style x:Key="AbaLateral" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="raiz" Background="Transparent" Padding="18,12" Margin="0,1"
+                                BorderThickness="3,0,0,0" BorderBrush="Transparent">
+                            <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="raiz" Property="Background" Value="#1A1D26" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="raiz" Property="Background" Value="#1A1D26" />
+                                <Setter TargetName="raiz" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                <Setter Property="Foreground" Value="{StaticResource Text}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <TabControl x:Name="Abas" TabStripPlacement="Left" Background="{StaticResource Bg}"
+                BorderThickness="0" Padding="0">
+        <TabControl.Resources>
+            <Style TargetType="TabPanel">
+                <Setter Property="Background" Value="#161923" />
+            </Style>
+        </TabControl.Resources>
+
+        <TabItem Style="{StaticResource AbaLateral}">
+            <TabItem.Header>
+                <StackPanel Width="150">
+                    <TextBlock Text="Tutorial" />
+                    <TextBlock Text="comece por aqui" FontSize="10" Foreground="{StaticResource TextDim}" />
+                </StackPanel>
+            </TabItem.Header>
+            <v:TutorialView />
+        </TabItem>
+
+        <TabItem Style="{StaticResource AbaLateral}">
+            <TabItem.Header>
+                <StackPanel Width="150">
+                    <TextBlock Text="Instalação" />
+                    <TextBlock Text="montar o servidor" FontSize="10" Foreground="{StaticResource TextDim}" />
+                </StackPanel>
+            </TabItem.Header>
+            <v:InstallView />
+        </TabItem>
+
+        <TabItem Style="{StaticResource AbaLateral}">
+            <TabItem.Header>
+                <StackPanel Width="150">
+                    <TextBlock Text="Servidor" />
+                    <TextBlock Text="ligar e comandar" FontSize="10" Foreground="{StaticResource TextDim}" />
+                </StackPanel>
+            </TabItem.Header>
+            <v:ServerView />
+        </TabItem>
+
+        <TabItem Style="{StaticResource AbaLateral}">
+            <TabItem.Header>
+                <StackPanel Width="150">
+                    <TextBlock Text="Ajustes" />
+                    <TextBlock Text="recursos e drops" FontSize="10" Foreground="{StaticResource TextDim}" />
+                </StackPanel>
+            </TabItem.Header>
+            <v:TuningView />
+        </TabItem>
+
+        <TabItem Style="{StaticResource AbaLateral}">
+            <TabItem.Header>
+                <StackPanel Width="150">
+                    <TextBlock Text="Módulos" />
+                    <TextBlock Text="bots e leilão" FontSize="10" Foreground="{StaticResource TextDim}" />
+                </StackPanel>
+            </TabItem.Header>
+            <v:ModulesView />
+        </TabItem>
+
+        <TabItem Style="{StaticResource AbaLateral}">
+            <TabItem.Header>
+                <StackPanel Width="150" Margin="0,20,0,0">
+                    <TextBlock Text="⚙  Configurações" />
+                    <TextBlock Text="banco e caminhos" FontSize="10" Foreground="{StaticResource TextDim}" />
+                </StackPanel>
+            </TabItem.Header>
+            <v:SettingsView />
+        </TabItem>
+
+    </TabControl>
+</Window>

@@ -1,0 +1,52 @@
+<UserControl x:Class="WowServer.Gui.Views.ServerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:WowServer.Gui.Views">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Servidor" Style="{StaticResource Titulo}" />
+            <TextBlock Style="{StaticResource Subtitulo}"
+                       Text="O authserver cuida do login; o worldserver é o mundo em si. No primeiro start o worldserver aplica os SQLs e demora uns 10 minutos — é normal ele despejar milhares de linhas." />
+        </StackPanel>
+
+        <DockPanel Grid.Row="1" Margin="0,0,0,14">
+            <Button x:Name="BtnIniciar" Content="Iniciar servidor" Style="{StaticResource BotaoPrincipal}"
+                    Click="Iniciar_Click" />
+            <Button x:Name="BtnParar" Content="Desligar" Click="Parar_Click" IsEnabled="False"
+                    ToolTip="Pede desligamento limpo: salva os personagens antes de encerrar." />
+            <Button x:Name="BtnMatar" Content="Forçar encerramento" Click="Matar_Click" IsEnabled="False"
+                    ToolTip="Mata o processo. Perde o que ainda não foi salvo — use só se travar." />
+
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                <TextBlock Text="Layout:" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="{StaticResource TextDim}" />
+                <Button x:Name="BtnLadoALado" Content="Lado a lado" Padding="10,4" FontSize="12"
+                        Click="LadoALado_Click" />
+                <Button x:Name="BtnEmpilhado" Content="Empilhado" Padding="10,4" FontSize="12"
+                        Click="Empilhado_Click" />
+            </StackPanel>
+        </DockPanel>
+
+        <Grid x:Name="Paineis" Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="Col0" Width="*" />
+                <ColumnDefinition x:Name="ColSep" Width="10" />
+                <ColumnDefinition x:Name="Col1" Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="Lin0" Height="*" />
+                <RowDefinition x:Name="LinSep" Height="0" />
+                <RowDefinition x:Name="Lin1" Height="0" />
+            </Grid.RowDefinitions>
+
+            <v:ConsolePane x:Name="PainelAuth"  Grid.Row="0" Grid.Column="0" />
+            <v:ConsolePane x:Name="PainelWorld" Grid.Row="0" Grid.Column="2" />
+        </Grid>
+    </Grid>
+</UserControl>

@@ -20,3 +20,8 @@ Buildings/
 Cameras/
 *.conf
 !*.conf.dist
+
+# Build do .NET (GUI)
+gui/**/bin/
+gui/**/obj/
+gui/publish/
