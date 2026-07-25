@@ -513,5 +513,56 @@ Check("guarda o primeiro erro, nao o ultimo",
 compilou.Reset();
 Check("reset limpa o motivo", compilou.FirstFailure is null && !compilou.Started);
 
+// ---- comandos de GM -------------------------------------------------------
+Check("catalogo de comandos nao esta vazio", GmCommands.All.Count > 0);
+Check("todo comando tem categoria conhecida",
+      GmCommands.All.All(c => GmCommands.Categories.Contains(c.Category)));
+Check("titulos nao se repetem",
+      GmCommands.All.Select(c => c.Title).Distinct().Count() == GmCommands.All.Count);
+
+// O ponto e do chat do jogo; no console do worldserver ele nao entra. Guardar
+// o template sem ponto e acrescentar so na exibicao mantem os dois certos.
+Check("nenhum template comeca com ponto",
+      GmCommands.All.All(c => !c.Template.StartsWith('.')),
+      GmCommands.All.FirstOrDefault(c => c.Template.StartsWith('.'))?.Title ?? "");
+
+Check("achou marcadores simples",
+      GmCommands.FindPlaceholders("account create <usuario> <senha>")
+                .SequenceEqual(new[] { "usuario", "senha" }));
+Check("marcador repetido conta uma vez",
+      GmCommands.FindPlaceholders("<a> e <a>").Count == 1);
+Check("sem marcador devolve vazio", GmCommands.FindPlaceholders("saveall").Count == 0);
+Check("texto com espaco dentro nao e marcador",
+      GmCommands.FindPlaceholders("vida < 50 e mana > 10").Count == 0);
+Check("'<>' vazio nao e marcador", GmCommands.FindPlaceholders("a <> b").Count == 0);
+Check("marcador sem fechar e ignorado", GmCommands.FindPlaceholders("a <b").Count == 0);
+
+Check("Fill troca o marcador",
+      GmCommands.Fill("account create <usuario> <senha>",
+          new Dictionary<string, string> { ["usuario"] = "mateus", ["senha"] = "1234" })
+      == "account create mateus 1234");
+Check("Fill ignora valor vazio",
+      GmCommands.Fill("tele <lugar>", new Dictionary<string, string> { ["lugar"] = "  " })
+      == "tele <lugar>");
+Check("Fill tira espaco em volta",
+      GmCommands.Fill("tele <lugar>", new Dictionary<string, string> { ["lugar"] = " dalaran " })
+      == "tele dalaran");
+Check("Fill deixa marcador desconhecido no lugar",
+      GmCommands.Fill("tele <lugar>", new Dictionary<string, string> { ["outro"] = "x" })
+      == "tele <lugar>");
+
+// Comando de console sem marcador e o unico que a GUI manda sozinha; se um
+// deles precisasse de preenchimento, ela enviaria lixo para o servidor.
+var prontos = GmCommands.All
+    .Where(c => c.Target == CommandTarget.Console && !c.NeedsFilling)
+    .Select(c => c.Title)
+    .ToList();
+Check("ha comandos de console prontos para enviar", prontos.Count > 0, string.Join(", ", prontos));
+
+// shutdown 0 e recusado pelo servidor (LANG_BAD_VALUE): o template tem que
+// deixar o tempo a cargo do usuario, nao chutar zero
+var desligar = GmCommands.All.First(c => c.Template.StartsWith("server shutdown"));
+Check("shutdown pede o tempo em vez de fixar", desligar.NeedsFilling, desligar.Template);
+
 Console.WriteLine($"\n{total - falhas}/{total} testes passaram (final)");
 return falhas == 0 ? 0 : 1;

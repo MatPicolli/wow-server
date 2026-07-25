@@ -543,6 +543,79 @@ function Write-TextFileNoBom {
     [IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
 }
 
+function Get-MmapVersionInfo {
+    <#
+        Compara a versao dos .mmtile ja gerados com a que o core em uso espera.
+
+        Cada troca de core pode mudar o formato dos mmaps. O worldserver nao
+        converte nem avisa de forma clara: ele recusa tile por tile com
+        "was built with generator v20, expected v19" e simplesmente NAO carrega
+        aquele pedaco do mapa. O jogo abre, da para jogar, e o pathfinding
+        simplesmente nao existe onde os tiles foram recusados - criaturas
+        atravessam parede e bots ficam presos.
+
+        Devolve um hashtable com Esperada, Encontrada, Combina e Motivo.
+        Esperada/Encontrada vem $null quando nao deu para descobrir.
+    #>
+    param([Parameter(Mandatory)][hashtable]$Settings)
+
+    $r = @{ Esperada = $null; Encontrada = $null; Combina = $true; Motivo = '' }
+
+    # A esperada esta no codigo-fonte do core que esta instalado.
+    $header = Join-Path $Settings.SourceDir 'src\common\Collision\Maps\MapDefines.h'
+    if (Test-Path $header) {
+        foreach ($linha in (Get-Content $header -ErrorAction SilentlyContinue)) {
+            if ($linha -match '^\s*#define\s+MMAP_VERSION\s+(\d+)') {
+                $r.Esperada = [int]$Matches[1]
+                break
+            }
+        }
+    }
+    if ($null -eq $r.Esperada) { $r.Motivo = 'nao achei MMAP_VERSION no codigo-fonte'; return $r }
+
+    $mmapsDir = Join-Path (Join-Path $Settings.ServerDir 'Data') 'mmaps'
+    if (-not (Test-Path $mmapsDir)) { $r.Motivo = 'ainda nao ha mmaps extraidos'; return $r }
+
+    $amostra = Get-ChildItem $mmapsDir -Filter '*.mmtile' -File -ErrorAction SilentlyContinue |
+               Select-Object -First 1
+    if (-not $amostra) { $r.Motivo = 'ainda nao ha mmaps extraidos'; return $r }
+
+    # struct MmapTileHeader { uint32 mmapMagic; uint32 dtVersion; uint32
+    # mmapVersion; ... } - a versao e o terceiro uint32, byte 8.
+    try {
+        $fs = [IO.File]::OpenRead($amostra.FullName)
+        try {
+            $buf = New-Object byte[] 12
+            if ($fs.Read($buf, 0, 12) -lt 12) { $r.Motivo = 'arquivo .mmtile truncado'; return $r }
+            $r.Encontrada = [BitConverter]::ToUInt32($buf, 8)
+        } finally { $fs.Dispose() }
+    } catch {
+        $r.Motivo = "nao consegui ler $($amostra.Name): $_"
+        return $r
+    }
+
+    $r.Combina = ($r.Encontrada -eq $r.Esperada)
+    return $r
+}
+
+function Write-MmapVersionWarning {
+    <#
+        Mostra o resultado do Get-MmapVersionInfo, se houver o que mostrar.
+        Devolve $true quando ha incompatibilidade.
+    #>
+    param([Parameter(Mandatory)][hashtable]$Settings)
+
+    $info = Get-MmapVersionInfo -Settings $Settings
+    if ($info.Combina) { return $false }
+
+    Write-Warn "os mmaps existentes sao da versao $($info.Encontrada), e este core espera a $($info.Esperada)"
+    Write-Info 'o servidor sobe e da para jogar, mas o pathfinding NAO carrega:'
+    Write-Info '  criaturas atravessam parede, e os bots ficam presos'
+    Write-Info 'para corrigir (leva horas, so os mmaps sao refeitos):'
+    Write-Info '  .\scripts\05-extract-client-data.ps1 -Only mmaps -Force'
+    return $true
+}
+
 function Test-MySqlReachable {
     <#
         Diz se ha algo escutando na porta do MySQL.

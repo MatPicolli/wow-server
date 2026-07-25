@@ -256,6 +256,14 @@ if ($instalados.Count -gt 0) {
     }
 }
 
+# Cada core traz seu proprio MMAP_VERSION, e o worldserver recusa tile por tile
+# quando nao bate - sem parar, sem erro fatal, so sem pathfinding. Avisar aqui
+# evita a descoberta chata: servidor no ar, jogo funcionando, bots presos.
+Write-Step 'Conferindo os mmaps contra o core novo'
+if (-not (Write-MmapVersionWarning -Settings (Import-ServerSettings))) {
+    Write-Ok 'os mmaps existentes servem para este core'
+}
+
 if ($NoBuild) {
     Write-Step 'Core trocado'
     Write-Info 'a compilacao NAO foi feita (-NoBuild). Rode .\scripts\rebuild.ps1 quando quiser.'

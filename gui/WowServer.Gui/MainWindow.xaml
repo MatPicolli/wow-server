@@ -96,6 +96,16 @@
 
         <TabItem Style="{StaticResource AbaLateral}">
             <TabItem.Header>
+                <StackPanel Width="150">
+                    <TextBlock Text="Comandos" />
+                    <TextBlock Text="GM e itens" FontSize="10" Foreground="{StaticResource TextDim}" />
+                </StackPanel>
+            </TabItem.Header>
+            <v:CommandsView />
+        </TabItem>
+
+        <TabItem Style="{StaticResource AbaLateral}">
+            <TabItem.Header>
                 <StackPanel Width="150" Margin="0,20,0,0">
                     <TextBlock Text="⚙  Configurações" />
                     <TextBlock Text="banco e caminhos" FontSize="10" Foreground="{StaticResource TextDim}" />

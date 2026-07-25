@@ -40,6 +40,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\switch-core.ps1 -Playerbots # swap the core for a fork; preview, then -Apply
 .\scripts\remove-module.ps1 -Name mod-eluna   # preview, then -Apply
 .\scripts\reset-server.ps1           # wipe everything rebuildable, keep the extraction
+.\scripts\gm-heirlooms.ps1 -Character X     # mails every heirloom the DB has
 ```
 
 Numbered scripts `00`–`08` are the install pipeline and are individually
@@ -189,6 +190,21 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 
 **AzerothCore**
 
+- **Each core has its own `MMAP_VERSION`** (master is 20, the Playerbots fork
+  is 19). The worldserver does not convert or refuse to start — it rejects each
+  tile with "was built with generator vN, expected vM" and silently runs with no
+  pathfinding there. Switching cores means regenerating mmaps:
+  `05-extract-client-data.ps1 -Only mmaps -Force`. `Get-MmapVersionInfo` reads
+  the expected value from `src/common/Collision/Maps/MapDefines.h` and the actual
+  one from byte 8 of any `.mmtile`.
+- Console commands take no leading dot; in-game chat commands do. Commands that
+  need a target or a position (`additem`, `tele`, `npc add`) only work in chat —
+  the console has no character and no position. `send items` is `Console::Yes`,
+  which is why the heirloom kit goes by mail: max 12 items per letter
+  (`MAX_MAIL_ITEMS`).
+- Heirlooms are `item_template.Quality = 7` (`ITEM_QUALITY_HEIRLOOM`). Query for
+  them instead of hardcoding IDs — it picks up whatever modules added, and no
+  invented item IDs can creep in.
 - Log level numbering is inverted from intuition: higher is more verbose
   (`4` = Info, `2` = Error).
 - `server shutdown` rejects a delay of `0` with `LANG_BAD_VALUE`

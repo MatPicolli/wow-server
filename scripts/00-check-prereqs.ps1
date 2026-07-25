@@ -98,6 +98,18 @@ foreach ($pair in @(
     }
 }
 
+# So faz sentido depois que ha fonte e dados extraidos; antes disso passa calado.
+Write-Step 'mmaps'
+if (Write-MmapVersionWarning -Settings $settings) {
+    # Nao entra em $problems: o servidor sobe assim mesmo, e refazer sao horas.
+    # E decisao do usuario, nao impedimento.
+    Write-Info 'isto nao impede o servidor de subir - e uma decisao sua'
+} else {
+    $info = Get-MmapVersionInfo -Settings $settings
+    if ($info.Encontrada) { Write-Ok "versao $($info.Encontrada), compativel com o core" }
+    elseif ($info.Motivo) { Write-Info $info.Motivo }
+}
+
 Write-Host ''
 if ($problems.Count -gt 0) {
     Write-Host "  Faltando: $($problems -join ', ')" -ForegroundColor Red
