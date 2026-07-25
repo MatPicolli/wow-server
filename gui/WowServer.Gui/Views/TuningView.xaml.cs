@@ -32,6 +32,8 @@ public partial class TuningView : UserControl
 
         _runner.Output += linha =>
             Dispatcher.Invoke(() => Saida.Append(linha.Text, linha.Kind));
+
+        MontarAjustesConf();
     }
 
     /// <summary>Repoe o que o usuario tinha digitado na sessao anterior.</summary>
@@ -172,4 +174,136 @@ public partial class TuningView : UserControl
             _ocupado = false;
         }
     }
+
+    // ---------------------------------------------------- worldserver.conf ---
+
+    private readonly List<AjusteConfItem> _ajustesConf = new();
+
+    /// <summary>
+    /// Monta a lista de ajustes do worldserver.conf. Chamado do construtor, uma
+    /// vez - o catalogo nao muda em tempo de execucao.
+    /// </summary>
+    private void MontarAjustesConf()
+    {
+        foreach (var s in ConfigTuning.All)
+            _ajustesConf.Add(new AjusteConfItem(s));
+
+        FiltrarConf();
+    }
+
+    private void FiltroConf_Changed(object sender, RoutedEventArgs e) => FiltrarConf();
+
+    private void FiltrarConf()
+    {
+        // TextChanged dispara durante o InitializeComponent, antes de a lista existir.
+        if (ListaConf is null || CaixaFiltroConf is null) return;
+
+        var termo = CaixaFiltroConf.Text.Trim();
+        IEnumerable<AjusteConfItem> visiveis = _ajustesConf;
+
+        if (termo.Length > 0)
+        {
+            visiveis = visiveis.Where(
+                i => i.TextoBusca.Contains(termo, StringComparison.OrdinalIgnoreCase));
+        }
+
+        ListaConf.ItemsSource = visiveis
+            .OrderBy(i => ConfigTuning.Categories.ToList().IndexOf(i.Setting.Category))
+            .ThenBy(i => i.Setting.Label, StringComparer.CurrentCulture)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Junta o que foi preenchido num unico argumento "chave=valor,chave=valor".
+    /// Devolve null quando algum valor nao serve - a mensagem ja foi mostrada.
+    /// </summary>
+    private string? MontarArgumentoConf()
+    {
+        var pares = new List<string>();
+
+        foreach (var item in _ajustesConf)
+        {
+            if (string.IsNullOrWhiteSpace(item.Valor)) continue;
+
+            if (!ConfigTuning.TryParse(item.Setting, item.Valor, out var valor, out var erro))
+            {
+                MessageBox.Show($"{item.Setting.Label}: {erro}", "Valor inválido");
+                return null;
+            }
+
+            pares.Add($"{item.Setting.Key}={valor}");
+        }
+
+        if (pares.Count == 0)
+        {
+            MessageBox.Show(
+                "Preencha pelo menos um ajuste. Os campos em branco são deixados como estão.",
+                "Nada a fazer");
+            return null;
+        }
+
+        // Uma string so, separada por virgula: o ScriptRunner usa -File, e nesse
+        // modo o PowerShell entrega um array como uma unica string. O script
+        // quebra pela virgula do outro lado.
+        return string.Join(",", pares);
+    }
+
+    private async void PreviewConf_Click(object sender, RoutedEventArgs e)
+    {
+        var arg = MontarArgumentoConf();
+        if (arg is null) return;
+        await RodarAsync("tune-config.ps1", new[] { "-Setting", arg });
+    }
+
+    private async void AplicarConf_Click(object sender, RoutedEventArgs e)
+    {
+        var arg = MontarArgumentoConf();
+        if (arg is null) return;
+
+        var r = MessageBox.Show(
+            "Isso grava no worldserver.conf.\n\n"
+            + "Os valores originais são guardados na primeira vez, então dá para voltar "
+            + "atrás depois. O arquivo inteiro também é copiado antes.\n\n"
+            + "As mudanças só valem quando o servidor for reiniciado. Continuar?",
+            "Aplicar no servidor", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (r != MessageBoxResult.Yes) return;
+
+        await RodarAsync("tune-config.ps1", new[] { "-Setting", arg, "-Apply" });
+    }
+
+    private async void ResetConf_Click(object sender, RoutedEventArgs e)
+    {
+        var r = MessageBox.Show(
+            "Isso devolve todos os ajustes do worldserver.conf aos valores que tinham "
+            + "antes da primeira alteração.\n\nContinuar?",
+            "Restaurar original", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (r != MessageBoxResult.Yes) return;
+
+        await RodarAsync("tune-config.ps1", new[] { "-Reset", "-Apply" });
+        foreach (var item in _ajustesConf) item.Valor = string.Empty;
+        FiltrarConf();
+    }
+
+    private async void ListarConf_Click(object sender, RoutedEventArgs e)
+    {
+        var chaves = string.Join(",", ConfigTuning.All.Select(s => s.Key));
+        await RodarAsync("tune-config.ps1", new[] { "-List", "-Setting", chaves });
+    }
+}
+
+/// <summary>Uma linha da lista de ajustes do worldserver.conf.</summary>
+public sealed class AjusteConfItem
+{
+    public AjusteConfItem(ConfigSetting setting) => Setting = setting;
+
+    public ConfigSetting Setting { get; }
+
+    /// <summary>O que o usuario digitou. Vazio = nao mexer nesta chave.</summary>
+    public string Valor { get; set; } = string.Empty;
+
+    public string Rotulo => Setting.Label;
+    public string Detalhe => $"{Setting.Category}  ·  {Setting.Key}  ·  padrão {Setting.Default}";
+    public FieldHelpEntry Ajuda => Setting.Help;
+
+    public string TextoBusca => $"{Setting.Label} {Setting.Category} {Setting.Key} {Setting.Description}";
 }

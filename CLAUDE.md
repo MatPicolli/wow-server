@@ -52,6 +52,7 @@ Tuning scripts preview by default and require `-Apply` to write:
 .\scripts\tune-professions.ps1 -Mining 3 -Herbalism 3      # gathering yield (MinCount/MaxCount)
 .\scripts\tune-drop-chance.ps1 -QuestItems 3               # drop chance (Chance column)
 .\scripts\tune-professions.ps1 -Reset -Apply               # restore originals
+.\scripts\tune-config.ps1 -Setting Rate.XP.Kill=3,Rate.MoveSpeed.Player=1.5   # worldserver.conf
 ```
 
 ### GUI
@@ -131,6 +132,10 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   `$LASTEXITCODE`; otherwise it carries the last native command's value.
 - Splatting needs `@variable`. `@($hash.Args)` builds an array and passes the
   hashtable positionally.
+- `-File` passes every argument as a plain string: `-Setting a=1,b=2` arrives as
+  one string, not an array, so scripts the GUI calls must split on `,`
+  themselves. Repeating a parameter (`-Setting a -Setting b`) is a PowerShell
+  error, not an array.
 - A function returning an empty array yields **`$null`**, because the pipeline
   unrolls it. `return ,@($items)` — the leading comma is load-bearing, and
   without it a caller doing `.Count` fails under StrictMode.
@@ -205,6 +210,15 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 - Heirlooms are `item_template.Quality = 7` (`ITEM_QUALITY_HEIRLOOM`). Query for
   them instead of hardcoding IDs — it picks up whatever modules added, and no
   invented item IDs can creep in.
+- Rates like XP, movement speed and profession skill gain live in
+  `worldserver.conf`, not the database — `tune-config.ps1` edits it in place and
+  snapshots the original values to `configs/.tune-config-original.json` so
+  `-Reset` works. Conf changes need a worldserver restart.
+- The server silently ignores unknown config keys, so a mistyped key produces no
+  error and no effect. `tune-config.ps1` refuses a key that isn't already in the
+  file, and every key in `ConfigTuning` was read from `worldserver.conf.dist`.
+- There is **no config for crafting tool requirements** — that lives in the
+  client's DBC (totem categories), not in `worldserver.conf`.
 - Log level numbering is inverted from intuition: higher is more verbose
   (`4` = Info, `2` = Error).
 - `server shutdown` rejects a delay of `0` with `LANG_BAD_VALUE`

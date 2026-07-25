@@ -32,6 +32,25 @@ public partial class HelpIcon : UserControl
         set => SetValue(ChaveProperty, value);
     }
 
+    /// <summary>
+    /// Ajuda passada direto, em vez de buscada por chave.
+    ///
+    /// Serve para listas montadas em tempo de execucao - os ajustes do
+    /// worldserver.conf, que sao dezenas e trazem a propria explicacao. Repetir
+    /// esses textos no catalogo de chaves fixas seria duplicar conteudo que ja
+    /// existe, e daria duas versoes para desencontrar.
+    /// </summary>
+    public static readonly DependencyProperty EntradaProperty =
+        DependencyProperty.Register(
+            nameof(Entrada), typeof(FieldHelpEntry), typeof(HelpIcon),
+            new PropertyMetadata(null, AoTrocarChave));
+
+    public FieldHelpEntry? Entrada
+    {
+        get => (FieldHelpEntry?)GetValue(EntradaProperty);
+        set => SetValue(EntradaProperty, value);
+    }
+
     public HelpIcon() => InitializeComponent();
 
     private static void AoTrocarChave(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -45,7 +64,8 @@ public partial class HelpIcon : UserControl
         // controle em codigo; sair calado e melhor do que derrubar a janela.
         if (Bolha is null) return;
 
-        var entrada = FieldHelp.Find(Chave);
+        // Entrada direta manda; a chave e o caminho das telas fixas.
+        var entrada = Entrada ?? FieldHelp.Find(Chave);
         if (entrada is null)
         {
             // Chave errada e erro de programacao, nao do usuario. Fica visivel

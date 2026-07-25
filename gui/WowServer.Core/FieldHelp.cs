@@ -336,6 +336,15 @@ public static class FieldHelp
                     + "estiver logado, pode ser preciso sair e entrar para o correio aparecer.",
         },
 
+        new FieldHelpEntry("cfg.filtro", "Filtrar ajustes do servidor",
+            "Procura por nome, categoria ou pela chave do worldserver.conf.",
+            new[]
+            {
+                new HelpExample("xp", "os multiplicadores de experiência"),
+                new HelpExample("profiss", "ganho de perícia e número de profissões"),
+                new HelpExample("Rate.MoveSpeed", "dá para procurar pela chave direto"),
+            }),
+
         // ----------------------------------------------------------- console
         new FieldHelpEntry("console.comando", "Comando para o servidor",
             "Vai direto para o console do worldserver. Aqui NÃO se usa o ponto na "

@@ -582,6 +582,64 @@ foreach (var e in FieldHelp.All)
                            && !string.IsNullOrWhiteSpace(x.Meaning)));
 }
 
+// ---- ajustes do worldserver.conf ------------------------------------------
+Check("catalogo de ajustes nao esta vazio", ConfigTuning.All.Count > 0);
+Check("chaves de ajuste nao se repetem",
+      ConfigTuning.All.Select(c => c.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+      == ConfigTuning.All.Count);
+Check("toda categoria de ajuste e conhecida",
+      ConfigTuning.All.All(c => ConfigTuning.Categories.Contains(c.Category)));
+
+// Chave inventada nao daria erro nenhum: o servidor ignora o que nao conhece,
+// e o ajuste simplesmente nao teria efeito. Por isso o formato e conferido.
+Check("chaves de ajuste tem formato de chave de conf",
+      ConfigTuning.All.All(c => System.Text.RegularExpressions.Regex.IsMatch(
+          c.Key, @"^[A-Za-z][A-Za-z0-9._]*$")),
+      ConfigTuning.All.FirstOrDefault(c => !System.Text.RegularExpressions.Regex.IsMatch(
+          c.Key, @"^[A-Za-z][A-Za-z0-9._]*$"))?.Key ?? "");
+
+// O valor padrao vem do worldserver.conf.dist e e mostrado ao usuario; se nao
+// passasse na propria validacao, a tela estaria sugerindo algo recusavel.
+foreach (var c in ConfigTuning.All)
+{
+    Check($"ajuste '{c.Key}' tem exemplos explicados",
+          c.Examples.Count > 0 && c.Examples.All(x => !string.IsNullOrWhiteSpace(x.Value)
+                                                   && !string.IsNullOrWhiteSpace(x.Meaning)));
+    Check($"padrao de '{c.Key}' e valido para ele proprio",
+          ConfigTuning.TryParse(c, c.Default, out _, out var motivo), motivo ?? "");
+}
+
+var xp = ConfigTuning.Find("Rate.XP.Kill")!;
+Check("acha ajuste por chave", xp is not null);
+Check("busca de ajuste ignora caixa", ConfigTuning.Find("rate.xp.kill") is not null);
+Check("ajuste inexistente devolve null", ConfigTuning.Find("Rate.Inventada") is null);
+
+Check("aceita inteiro", ConfigTuning.TryParse(xp, "3", out var v1, out _) && v1 == "3");
+Check("aceita decimal com ponto", ConfigTuning.TryParse(xp, "1.5", out var v2, out _) && v2 == "1.5");
+// Teclado brasileiro produz virgula; o arquivo de conf le com ponto.
+Check("aceita decimal com virgula", ConfigTuning.TryParse(xp, "1,5", out var v3, out _) && v3 == "1.5");
+Check("tira espacos", ConfigTuning.TryParse(xp, "  2  ", out var v4, out _) && v4 == "2");
+Check("recusa texto", !ConfigTuning.TryParse(xp, "muito", out _, out _));
+Check("recusa vazio", !ConfigTuning.TryParse(xp, "", out _, out _));
+Check("recusa negativo", !ConfigTuning.TryParse(xp, "-1", out _, out _));
+
+var velocidade = ConfigTuning.Find("Rate.MoveSpeed.Player")!;
+Check("respeita o minimo do ajuste", !ConfigTuning.TryParse(velocidade, "0", out _, out _));
+Check("respeita o maximo do ajuste", !ConfigTuning.TryParse(velocidade, "99", out _, out _));
+Check("aceita dentro da faixa", ConfigTuning.TryParse(velocidade, "1.5", out _, out _));
+
+var profissoes = ConfigTuning.Find("MaxPrimaryTradeSkill")!;
+Check("inteiro recusa decimal", !ConfigTuning.TryParse(profissoes, "2.5", out _, out _));
+Check("inteiro aceita inteiro", ConfigTuning.TryParse(profissoes, "4", out _, out _));
+Check("inteiro respeita o teto", !ConfigTuning.TryParse(profissoes, "12", out _, out _));
+
+var durabilidade = ConfigTuning.Find("DurabilityLoss.OnDeath")!;
+Check("porcentagem recusa acima de 100", !ConfigTuning.TryParse(durabilidade, "150", out _, out _));
+Check("porcentagem aceita 0", ConfigTuning.TryParse(durabilidade, "0", out _, out _));
+
+Check("ajuda do ajuste sai montada",
+      xp.Help.Examples.Count > 0 && xp.Help.Title.Contains("Rate.XP.Kill"));
+
 Check("Find acha uma chave existente", FieldHelp.Find("db.host") is not null);
 Check("Find devolve null para chave inexistente", FieldHelp.Find("nao.existe") is null);
 Check("Find diferencia maiuscula", FieldHelp.Find("DB.HOST") is null);

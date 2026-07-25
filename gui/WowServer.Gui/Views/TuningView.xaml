@@ -115,6 +115,49 @@
                     <Button Content="Aplicar" Style="{StaticResource BotaoPrincipal}" Click="Aplicar_Click" />
                     <Button Content="Restaurar original" Click="Reset_Click" />
                 </StackPanel>
+
+                <!-- Ajustes do worldserver.conf. Sao outra coisa: nao mexem no
+                     banco, e so valem depois de reiniciar o servidor. Por isso
+                     tem lista, botoes e aviso proprios. -->
+                <TextBlock Text="Ajustes do servidor" Style="{StaticResource Titulo}" Margin="0,10,0,0" />
+                <TextBlock Style="{StaticResource Subtitulo}"
+                           Text="Estes ficam no worldserver.conf, não no banco. Valem quando o servidor for reiniciado. Deixe em branco o que não quiser mexer." />
+
+                <DockPanel Margin="0,0,0,10">
+                    <TextBlock DockPanel.Dock="Left" Text="Filtrar" VerticalAlignment="Center"
+                               Margin="0,0,4,0" Foreground="{StaticResource TextDim}" FontSize="12" />
+                    <v:HelpIcon DockPanel.Dock="Left" Chave="cfg.filtro" Margin="0,0,8,0" />
+                    <TextBox x:Name="CaixaFiltroConf" TextChanged="FiltroConf_Changed" />
+                </DockPanel>
+
+                <ItemsControl x:Name="ListaConf">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource BgPanel}" BorderBrush="{StaticResource Border}"
+                                    BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,6">
+                                <DockPanel>
+                                    <TextBox DockPanel.Dock="Right" Width="70" Margin="8,0,0,0"
+                                             Text="{Binding Valor, UpdateSourceTrigger=PropertyChanged}"
+                                             VerticalAlignment="Center" />
+                                    <v:HelpIcon DockPanel.Dock="Right" Entrada="{Binding Ajuda}" />
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Rotulo}" FontSize="13" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Detalhe}" FontSize="10" TextWrapping="Wrap"
+                                                   Foreground="{StaticResource TextDim}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,24">
+                    <Button Content="Ver o que mudaria" Click="PreviewConf_Click" />
+                    <Button Content="Aplicar no servidor" Style="{StaticResource BotaoPrincipal}"
+                            Click="AplicarConf_Click" />
+                    <Button Content="Restaurar original" Click="ResetConf_Click" />
+                    <Button Content="Ver valores atuais" Click="ListarConf_Click" />
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
 
