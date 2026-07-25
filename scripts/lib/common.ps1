@@ -192,6 +192,19 @@ function Find-BoostDir {
     return $null
 }
 
+function Get-CMakeVersion {
+    <#
+        Devolve a versao do cmake no PATH como [version], ou $null.
+    #>
+    if (-not (Test-Command 'cmake')) { return $null }
+    $line = (cmake --version | Select-Object -First 1)
+    if ($line -match '(\d+)\.(\d+)(?:\.(\d+))?') {
+        $patch = if ($Matches[3]) { $Matches[3] } else { '0' }
+        return [version]("{0}.{1}.{2}" -f $Matches[1], $Matches[2], $patch)
+    }
+    return $null
+}
+
 function Find-VsGenerator {
     <#
         Devolve o nome do generator do CMake pra versao do Visual Studio instalada.

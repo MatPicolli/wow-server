@@ -90,7 +90,30 @@ $cmakeArgs = @(
     "-DOPENSSL_ROOT_DIR=$openssl"
     "-DBOOST_ROOT=$env:BOOST_ROOT"
 )
-Invoke-Checked -FilePath 'cmake' -Arguments $cmakeArgs -What 'configuracao do CMake'
+& cmake @cmakeArgs
+$configureCode = $LASTEXITCODE
+
+# O CMake 4.x removeu a compatibilidade com projetos que pedem
+# cmake_minimum_required abaixo de 3.5. O CMakeLists principal do AzerothCore
+# declara 3.16, entao passa - mas alguma dependencia embutida pode nao passar.
+# CMAKE_POLICY_VERSION_MINIMUM=3.5 restaura o comportamento antigo.
+$cmakeVersion = Get-CMakeVersion
+if ($configureCode -ne 0 -and $cmakeVersion -and $cmakeVersion.Major -ge 4) {
+    Write-Warn "A configuracao falhou com CMake $cmakeVersion."
+    Write-Info "tentando de novo com -DCMAKE_POLICY_VERSION_MINIMUM=3.5 (compatibilidade com CMake 4.x)..."
+
+    & cmake @($cmakeArgs + '-DCMAKE_POLICY_VERSION_MINIMUM=3.5')
+    $configureCode = $LASTEXITCODE
+
+    if ($configureCode -eq 0) {
+        Write-Ok "configurado com o flag de compatibilidade"
+    }
+}
+
+if ($configureCode -ne 0) {
+    Write-Fail "A configuracao do CMake falhou (exit code $configureCode)." `
+               "Leia a PRIMEIRA mensagem de erro acima, nao a ultima. Se falar em Boost, confira que BOOST_ROOT usa barras normais."
+}
 Write-Ok "configurado"
 
 # --- build -----------------------------------------------------------------

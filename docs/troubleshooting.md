@@ -74,6 +74,27 @@ Modify → inclua o **MySQL Server** completo.
 
 Confira: `C:\Program Files\MySQL\MySQL Server 8.4\lib\libmysql.lib`
 
+### `Compatibility with CMake < 3.5 has been removed from CMake`
+
+Você está no CMake 4.x. Ele deixou de aceitar projetos que pedem
+`cmake_minimum_required` abaixo de 3.5.
+
+O `CMakeLists.txt` principal do AzerothCore declara `3.16...3.22`, então passa
+— mas alguma dependência embutida pode não passar. O `03-build.ps1` detecta
+isso e refaz a configuração automaticamente com:
+
+```
+-DCMAKE_POLICY_VERSION_MINIMUM=3.5
+```
+
+Se você estiver chamando o `cmake` na mão, acrescente esse flag.
+
+Continuando a falhar, use o último CMake 3.x (3.31.x) em vez do 4.x:
+
+```powershell
+winget install --id Kitware.CMake --exact --version 3.31.6
+```
+
 ### O build falha em um projeto aleatório e roda de novo passa
 
 Acontece com paralelismo alto. Rode de novo:
