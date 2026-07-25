@@ -61,6 +61,21 @@ if (-not $foundDist) {
     Write-Warn "Nao achei nenhum .conf.dist. Procure por 'worldserver.conf.dist' dentro de '$($settings.BuildDir)' e copie na mao pra '$server\configs'."
 }
 
+# Modulos instalados em source\modules geram os proprios .conf.dist numa
+# subpasta 'modules'. Sem copiar isso, o modulo sobe sem configuracao.
+$moduleDist = Join-Path $binDir 'configs\modules'
+if (Test-Path $moduleDist) {
+    $moduleTarget = Join-Path $server 'configs\modules'
+    New-DirectoryIfMissing $moduleTarget
+
+    $modDists = Get-ChildItem $moduleDist -Filter '*.conf.dist' -File -ErrorAction SilentlyContinue
+    foreach ($d in $modDists) {
+        Copy-Item $d.FullName $moduleTarget -Force
+        Write-Ok "modules\$($d.Name)"
+    }
+    if ($modDists) { Write-Info "$($modDists.Count) config(s) de modulo - o 07-configure.ps1 gera os .conf" }
+}
+
 # --- DLLs do MySQL ---------------------------------------------------------
 Write-Step "Copiando as DLLs do MySQL"
 $mysqlDir = Find-MySqlDir

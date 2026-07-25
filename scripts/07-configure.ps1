@@ -109,6 +109,28 @@ Set-ConfValue -Path $worldConf -Key 'MoveMaps.Enable'       -Value $(if ($hasMma
 if (-not $hasVmaps) { Write-Warn "vmaps ausentes - line-of-sight desligado (mobs enxergam atraves de parede)" }
 if (-not $hasMmaps) { Write-Warn "mmaps ausentes - pathfinding desligado (mobs andam em linha reta)" }
 
+# --- configs de modulos ----------------------------------------------------
+# Modulos trazem .conf.dist proprios. Aqui so viram .conf com os valores
+# padrao - os ajustes de cada modulo voce faz na mao, lendo o README dele.
+$moduleConfigs = Join-Path $configsDir 'modules'
+if (Test-Path $moduleConfigs) {
+    Write-Step "Configuracoes de modulos"
+    $created = 0
+    foreach ($dist in (Get-ChildItem $moduleConfigs -Filter '*.conf.dist' -File)) {
+        $conf = Join-Path $moduleConfigs ($dist.BaseName)   # tira o .dist
+        if ((Test-Path $conf) -and -not $Force) {
+            Write-Info "$($dist.BaseName) ja existe, mantendo"
+            continue
+        }
+        Copy-Item $dist.FullName $conf -Force
+        Write-Ok $dist.BaseName
+        $created++
+    }
+    if ($created -gt 0) {
+        Write-Info "revise os valores em $moduleConfigs conforme o README de cada modulo"
+    }
+}
+
 # --- realmlist.wtf do client ----------------------------------------------
 if (-not $SkipClient) {
     Write-Step "Apontando o client para $($settings.RealmAddress)"
