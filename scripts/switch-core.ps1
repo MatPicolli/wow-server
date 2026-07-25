@@ -200,8 +200,10 @@ if ($SkipBackup) {
     Write-Info 'o backup e precaucao para a compilacao seguinte, quando o worldserver aplica SQL.'
     Write-Info ''
     Write-Info 'escolha uma:'
-    Write-Info '  1) inicie o MySQL e rode este comando de novo (recomendado)'
-    Write-Info '  2) siga sem backup:  .\scripts\switch-core.ps1 -Playerbots -Apply -SkipBackup'
+    Write-Info '  1) ligue o MySQL e rode este comando de novo (recomendado):'
+    Write-Info '       .\scripts\start-mysql.ps1 -Automatic     (como Administrador)'
+    Write-Info '  2) siga sem backup:'
+    Write-Info '       .\scripts\switch-core.ps1 -Playerbots -Apply -SkipBackup'
     Write-Info ''
     Write-Host '    [erro] sem MySQL no ar nao da para fazer backup. Nada foi alterado.' -ForegroundColor Red
 

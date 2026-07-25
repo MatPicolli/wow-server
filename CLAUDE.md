@@ -34,6 +34,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\start-server.ps1            # opens authserver + worldserver
 .\scripts\stop-server.ps1             # clean shutdown; -Force kills
 .\scripts\rebuild.ps1                 # build -> deploy -> configure, after adding/removing modules
+.\scripts\start-mysql.ps1 -Automatic  # start the MySQL service (needs Administrator)
 .\scripts\backup-db.ps1               # safe to run against a live server
 .\scripts\repair-settings.ps1         # recover a settings.psd1 with duplicate keys
 .\scripts\switch-core.ps1 -Playerbots # swap the core for a fork; preview, then -Apply
@@ -159,6 +160,17 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 
 **MySQL**
 
+- Installed silently through winget, so the service is often left on *Manual*
+  start and is simply not running after a reboot. The service name carries the
+  version (`MySQL80`, `MySQL84`, …) — match on `MySQL*`, don't hardcode.
+- Test the **port**, not the service state: `Start-Service` returns as soon as
+  the service reports Running, which is before the server accepts connections,
+  and a service can be Running while listening somewhere else entirely.
+  `Test-MySqlReachable` is a plain TCP connect, which also separates "server is
+  down" from "wrong password" — `mysqldump`'s own error does not.
+- Ask for elevation only immediately before the call that needs it. Checking
+  `Assert-Admin` up front demands a UAC prompt for runs that turn out to have
+  nothing to do.
 - MySQL 8 defaults to `sql_mode=only_full_group_by`; MariaDB does not. A
   `GROUP BY` that works locally may fail with `ERROR 1055` for the user.
 - `MinCount`/`MaxCount` in loot tables are `tinyint unsigned`; writing >255

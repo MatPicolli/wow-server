@@ -48,7 +48,7 @@ if (-not $dump) {
 # que mistura servidor desligado com senha errada. Sao problemas diferentes.
 if (-not (Test-MySqlReachable -Settings $settings)) {
     Write-Fail "o MySQL nao esta respondendo em $($m.Host):$($m.Port)." `
-               "Inicie o servico do MySQL e tente de novo. Se ele roda em outro endereco, ajuste MySql.Host/Port em config\settings.psd1."
+               "Rode .\scripts\start-mysql.ps1 (como Administrador). Se o MySQL roda em outro endereco, ajuste MySql.Host/Port em config\settings.psd1."
 }
 
 if (-not $Path) { $Path = Join-Path $settings.Root 'backups' }
