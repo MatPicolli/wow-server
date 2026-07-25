@@ -169,7 +169,14 @@ public partial class InstallView : UserControl
                         $"{passo.Title.ToUpperInvariant()} FALHOU"
                         + (progresso.Errors > 0 ? $" — {progresso.Errors} erro(s)" : $" — código {codigo}"),
                         sucesso: false);
-                    Saida.Append("Procure a PRIMEIRA linha com 'error' — as seguintes costumam ser consequência.");
+
+                    if (progresso.FirstFailure is not null)
+                        Saida.Append("Motivo: " + progresso.FirstFailure, OutputKind.Error);
+
+                    // Com erro de compilador vale caçar a primeira ocorrencia;
+                    // sem nenhum, a causa e outra e o conselho atrapalha.
+                    if (progresso.Errors > 1)
+                        Saida.Append("Os erros seguintes costumam ser consequência do primeiro.");
                     break;   // nao adianta seguir: as etapas dependem umas das outras
                 }
 

@@ -188,6 +188,15 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   `ModuleCatalog.SatisfiesFork` accepts both — treating the old one as "wrong
   core" would trigger a reclone that **deletes the source tree**.
 
+- The module catalogue in `ModuleCatalog.cs` is curated, not exhaustive. Anything
+  else installs through the URL box, validated by `CustomModuleUrl`. Every
+  catalogue entry's `Name` must equal the tail of its `Repository` — that name is
+  the folder under `modules/`, and the tests enforce it.
+- Every URL in the catalogue was checked with `git ls-remote` before being added.
+  Several plausible-sounding repos do not exist under the `azerothcore` org
+  (`mod-reagent-bank` and `mod-individual-progression` are `ZhengPeiRu21`'s,
+  `mod-assistant` is `noisiver`'s). Check before adding, don't assume the org.
+
 **Comparing repository URLs**
 
 - The same origin appears as https, ssh (`git@github.com:owner/repo.git`), with

@@ -13,12 +13,46 @@
             <StackPanel DockPanel.Dock="Top">
                 <TextBlock Text="Módulos" Style="{StaticResource Titulo}" />
                 <TextBlock Style="{StaticResource Subtitulo}"
-                           Text="Instalar um módulo clona o repositório e recompila. O SQL que ele traz é aplicado sozinho no próximo start do servidor." />
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                           Text="Instalar um módulo clona o repositório. Depois use Recompilar. O SQL que ele traz é aplicado sozinho no próximo start do servidor." />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                     <Button Content="Recompilar" Click="Rebuild_Click"
                             ToolTip="Refaz build, deploy e configuração. Use depois de instalar ou atualizar módulos." />
                     <Button Content="Atualizar instalados" Click="Atualizar_Click" />
                 </StackPanel>
+
+                <DockPanel Margin="0,0,0,10">
+                    <TextBlock DockPanel.Dock="Left" Text="Filtrar" VerticalAlignment="Center"
+                               Margin="0,0,8,0" Foreground="{StaticResource TextDim}" FontSize="12" />
+                    <CheckBox x:Name="ChkSoNaoInstalados" DockPanel.Dock="Right" Content="ocultar instalados"
+                              FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"
+                              Checked="Filtro_Changed" Unchecked="Filtro_Changed" />
+                    <TextBox x:Name="CaixaFiltro" TextChanged="Filtro_Changed"
+                             ToolTip="Filtra por nome ou descrição. Ex.: leilão, bot, transmog" />
+                </DockPanel>
+
+                <!-- Instalacao por URL: o catalogo cobre os principais, mas o
+                     AzerothCore tem muito mais modulos do que cabe numa lista
+                     curada, e aparecem novos. -->
+                <Expander Header="Instalar um módulo que não está na lista" FontSize="12"
+                          Margin="0,0,0,12">
+                    <StackPanel Margin="0,8,0,0">
+                        <TextBlock TextWrapping="Wrap" FontSize="11"
+                                   Foreground="{StaticResource TextDim}" Margin="0,0,0,6"
+                                   Text="Cole o endereço do repositório. A pasta recebe o nome do repositório. Módulos fora da lista não foram testados aqui — leia o README antes." />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Instalar" Margin="8,0,0,0"
+                                    Click="InstalarUrl_Click" />
+                            <TextBox x:Name="CaixaUrl" FontFamily="Consolas" FontSize="11"
+                                     ToolTip="Ex.: https://github.com/azerothcore/mod-duel-reset" />
+                        </DockPanel>
+                        <TextBlock Margin="0,6,0,0" FontSize="11" TextWrapping="Wrap">
+                            <Hyperlink NavigateUri="https://github.com/orgs/azerothcore/repositories?q=mod-"
+                                       RequestNavigate="Link_RequestNavigate">
+                                Ver todos os módulos oficiais do AzerothCore
+                            </Hyperlink>
+                        </TextBlock>
+                    </StackPanel>
+                </Expander>
             </StackPanel>
 
             <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -37,6 +71,9 @@
                                         <TextBlock Text="{Binding Nome}" FontWeight="SemiBold" FontSize="14" />
                                     </DockPanel>
 
+                                    <TextBlock Text="{Binding Categoria}" FontSize="10" Margin="0,2,0,0"
+                                               Foreground="{StaticResource TextDim}" />
+
                                     <TextBlock Text="{Binding Resumo}" Margin="0,6,0,0" TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding Detalhes}" Foreground="{StaticResource TextDim}"
                                                FontSize="12" TextWrapping="Wrap" Margin="0,6,0,10" />
@@ -46,6 +83,15 @@
                                             Margin="0,0,0,10" Visibility="{Binding VisibilidadeAlerta}">
                                         <TextBlock Text="{Binding Alerta}" TextWrapping="Wrap"
                                                    FontSize="11" Foreground="{StaticResource Err}" />
+                                    </Border>
+
+                                    <!-- Passo manual: instala e compila sem ele,
+                                         mas o modulo nao funciona. -->
+                                    <Border Background="#2A241A" BorderBrush="{StaticResource Warn}"
+                                            BorderThickness="1" CornerRadius="3" Padding="8,6"
+                                            Margin="0,0,0,10" Visibility="{Binding VisibilidadePassoManual}">
+                                        <TextBlock Text="{Binding PassoManual}" TextWrapping="Wrap"
+                                                   FontSize="11" Foreground="{StaticResource Warn}" />
                                     </Border>
 
                                     <StackPanel Orientation="Horizontal">

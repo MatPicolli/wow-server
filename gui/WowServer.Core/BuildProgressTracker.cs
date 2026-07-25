@@ -27,10 +27,24 @@ public sealed class BuildProgressTracker
     private static readonly Regex Erro = new(@":\s*(?:fatal\s+)?error\s+[A-Z]+\d+", RegexOptions.Compiled);
     private static readonly Regex Aviso = new(@":\s*warning\s+[A-Z]+\d+", RegexOptions.Compiled);
 
+    // Os scripts marcam falha com "[erro] ...". Uma dessas antes do primeiro
+    // arquivo significa que o build nem chegou a comecar - dizer "0 erro(s)" e
+    // mandar procurar a primeira linha com 'error' so confunde.
+    private static readonly Regex ErroDeScript = new(@"^\s*\[erro\]\s*(?<m>.+)$", RegexOptions.Compiled);
+
     public int CompiledFiles { get; private set; }
     public int FinishedProjects { get; private set; }
     public int Errors { get; private set; }
     public int Warnings { get; private set; }
+
+    /// <summary>Primeira falha vista, seja do compilador ou de um script.</summary>
+    public string? FirstFailure { get; private set; }
+
+    /// <summary>
+    /// Se o compilador chegou a rodar. Falso quando algo barrou antes - uma
+    /// verificacao do rebuild.ps1, CMake nao configurado, fonte ausente.
+    /// </summary>
+    public bool Started => CompiledFiles > 0 || FinishedProjects > 0;
 
     /// <summary>Estimativa de arquivos a compilar. 0 = desconhecido.</summary>
     public int EstimatedTotal { get; set; }
@@ -46,14 +60,30 @@ public sealed class BuildProgressTracker
         Warnings = 0;
         LastFile = null;
         LastProject = null;
+        FirstFailure = null;
     }
 
     public void Feed(string linha)
     {
         if (string.IsNullOrEmpty(linha)) return;
 
-        if (Erro.IsMatch(linha)) { Errors++; return; }
+        if (Erro.IsMatch(linha))
+        {
+            Errors++;
+            FirstFailure ??= linha.Trim();
+            return;
+        }
         if (Aviso.IsMatch(linha)) { Warnings++; return; }
+
+        // Nao incrementa Errors: e falha de script, nao do compilador, e
+        // misturar as duas contagens produziria "1 erro(s)" para algo que
+        // nunca chegou a compilar.
+        var s = ErroDeScript.Match(linha);
+        if (s.Success)
+        {
+            FirstFailure ??= s.Groups["m"].Value.Trim();
+            return;
+        }
 
         var m = Compilando.Match(linha);
         if (m.Success)

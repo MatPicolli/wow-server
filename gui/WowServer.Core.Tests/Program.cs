@@ -421,5 +421,97 @@ var ahbot = ModuleCatalog.All.First(m => m.Name == "mod-ah-bot");
 Check("modulo sem fork aceita qualquer core",
       ModuleCatalog.SatisfiesFork(ahbot, "https://github.com/azerothcore/azerothcore-wotlk.git"));
 
+// ---- integridade do catalogo ---------------------------------------------
+Check("catalogo sem nomes repetidos",
+      ModuleCatalog.All.Select(m => m.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+      == ModuleCatalog.All.Count);
+Check("catalogo sem titulos repetidos",
+      ModuleCatalog.All.Select(m => m.DisplayName).Distinct().Count() == ModuleCatalog.All.Count);
+
+// O nome e o nome da pasta em modules/ - se nao bater com o final da URL, o
+// card diz "instalado" para uma pasta que nunca vai existir.
+foreach (var m in ModuleCatalog.All)
+{
+    CustomModuleUrl.TryParse(m.Repository, out var derivado, out _);
+    Check($"nome de {m.Name} bate com a URL",
+          string.Equals(derivado, m.Name, StringComparison.OrdinalIgnoreCase),
+          derivado ?? "(nao parseou)");
+}
+
+foreach (var m in ModuleCatalog.All)
+    Check($"categoria de {m.Name} e conhecida",
+          ModuleCatalog.Categories.Contains(m.Category), m.Category);
+
+Check("fork so aparece em modulo marcado como ExigeFork",
+      ModuleCatalog.All.All(m => m.ForkRepository is null || m.Status == ModuleStatus.ExigeFork));
+Check("todo ExigeFork traz repositorio e branch",
+      ModuleCatalog.All.Where(m => m.Status == ModuleStatus.ExigeFork)
+                       .All(m => m.ForkRepository is not null && m.ForkBranch is not null));
+Check("catalogo tem mais de uma categoria em uso",
+      ModuleCatalog.All.Select(m => m.Category).Distinct().Count() > 1);
+
+// ---- URL colada pelo usuario ---------------------------------------------
+// O final da URL vira nome de pasta dentro do codigo-fonte do core, entao o
+// que passa daqui precisa ser inofensivo como caminho e como argumento de git.
+static string? Pasta(string u) =>
+    CustomModuleUrl.TryParse(u, out var n, out _) ? n : null;
+
+Check("https simples", Pasta("https://github.com/azerothcore/mod-transmog") == "mod-transmog");
+Check("https com .git", Pasta("https://github.com/azerothcore/mod-transmog.git") == "mod-transmog");
+Check("https com barra final", Pasta("https://github.com/azerothcore/mod-transmog/") == "mod-transmog");
+Check("https com .git e barra", Pasta("https://github.com/azerothcore/mod-transmog.git/") == "mod-transmog");
+Check("espacos em volta", Pasta("  https://github.com/azerothcore/mod-transmog  ") == "mod-transmog");
+Check("ssh", Pasta("git@github.com:azerothcore/mod-transmog.git") == "mod-transmog");
+Check("ssh://", Pasta("ssh://git@github.com/azerothcore/mod-transmog.git") == "mod-transmog");
+Check("http tambem serve", Pasta("http://git.local/x/mod-foo.git") == "mod-foo");
+Check("underline e ponto no nome", Pasta("https://github.com/x/mod_foo.bar") == "mod_foo.bar");
+
+Check("vazio recusado", Pasta("") is null);
+Check("so espacos recusado", Pasta("   ") is null);
+Check("null recusado", !CustomModuleUrl.TryParse(null, out _, out _));
+Check("caminho local recusado", Pasta(@"C:\AzerothCore\source") is null);
+Check("sem esquema recusado", Pasta("github.com/x/mod-foo") is null);
+Check("com espaco no meio recusado", Pasta("https://github.com/x/mod foo") is null);
+
+// '..' escaparia de modules/ e escreveria dentro do codigo-fonte do core
+Check("'..' recusado", Pasta("https://github.com/x/..") is null);
+Check("nome comecando com ponto recusado", Pasta("https://github.com/x/.git") is null);
+Check("'.' recusado", Pasta("https://github.com/x/.") is null);
+
+// uma URL que comeca com '-' viraria opcao de linha de comando para o git
+Check("argumento disfarcado de opcao recusado", Pasta("--upload-pack=algo") is null);
+
+// mensagem de erro serve para mostrar na tela
+CustomModuleUrl.TryParse("nada disso", out _, out var msg);
+Check("erro traz mensagem util", !string.IsNullOrWhiteSpace(msg) && msg!.Length > 10, msg ?? "(vazia)");
+
+Check("aviso para nome fora da convencao", CustomModuleUrl.Advice("azerothcore-wotlk") is not null);
+Check("sem aviso para nome mod-", CustomModuleUrl.Advice("mod-transmog") is null);
+
+// ---- falha antes de compilar ---------------------------------------------
+// Foi o caso real: rebuild.ps1 barrou o core errado em 0 segundos, e a tela
+// disse "COMPILACAO FALHOU - 0 erro(s)" mandando procurar linha com 'error'.
+var barrado = new BuildProgressTracker();
+barrado.Feed("==> Modulos em C:\\AzerothCore\\source\\modules");
+barrado.Feed("    [erro] mod-playerbots exige o core de https://github.com/x/y");
+Check("erro de script nao vira erro de compilador", barrado.Errors == 0, barrado.Errors.ToString());
+Check("build nem comecou", !barrado.Started);
+Check("motivo capturado",
+      barrado.FirstFailure is not null && barrado.FirstFailure.StartsWith("mod-playerbots exige"),
+      barrado.FirstFailure ?? "(nulo)");
+
+var compilou = new BuildProgressTracker();
+compilou.Feed("  Foo.cpp");
+Check("build comecou apos um arquivo", compilou.Started);
+compilou.Feed(@"C:\x\Bar.cpp(10,1): error C2660: primeiro");
+compilou.Feed(@"C:\x\Baz.cpp(11,1): error C2660: segundo");
+Check("dois erros contados", compilou.Errors == 2, compilou.Errors.ToString());
+Check("guarda o primeiro erro, nao o ultimo",
+      compilou.FirstFailure is not null && compilou.FirstFailure.Contains("primeiro"),
+      compilou.FirstFailure ?? "(nulo)");
+
+compilou.Reset();
+Check("reset limpa o motivo", compilou.FirstFailure is null && !compilou.Started);
+
 Console.WriteLine($"\n{total - falhas}/{total} testes passaram (final)");
 return falhas == 0 ? 0 : 1;

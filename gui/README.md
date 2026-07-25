@@ -20,7 +20,7 @@ Ou abra `WowServerManager.sln` no Visual Studio e rode.
 | **Instalação** | As 8 etapas da instalação, cada uma executável isoladamente, com console ao lado. |
 | **Servidor** | Painéis do authserver e do worldserver, lado a lado ou empilhados, com caixa de comando para os comandos de GM. |
 | **Ajustes** | Multiplicadores de coleta e chance de drop (inclusive itens de quest), com perfis prontos e prévia antes de aplicar. |
-| **Módulos** | Catálogo com AH Bot, escalonamento de dungeon, LFG solo, Solocraft, Eluna e Playerbots. |
+| **Módulos** | Catálogo de 23 módulos em quatro categorias, com filtro, além de instalação por URL para qualquer outro repositório. |
 | **⚙ Configurações** | Caminhos, banco de dados, realm e repositório do core — gravados no `settings.psd1`. |
 
 ---

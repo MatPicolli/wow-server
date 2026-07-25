@@ -12,6 +12,7 @@ public enum AcaoModulo { Instalar, CorrigirCore, Nenhuma }
 public sealed class ModuloItem
 {
     public required string Nome { get; init; }
+    public required string Categoria { get; init; }
     public required string Resumo { get; init; }
     public required string Detalhes { get; init; }
     public required string Repositorio { get; init; }
@@ -21,7 +22,14 @@ public sealed class ModuloItem
     public required bool PodeInstalar { get; init; }
     public required AcaoModulo Acao { get; init; }
     public string? Alerta { get; init; }
+    public string? PassoManual { get; init; }
+
     public Visibility VisibilidadeAlerta => Alerta is null ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility VisibilidadePassoManual =>
+        PassoManual is null ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>Texto onde o filtro procura.</summary>
+    public string TextoBusca => $"{Nome} {Categoria} {Resumo} {Detalhes} {Repositorio}";
 }
 
 public partial class ModulesView : UserControl
@@ -67,11 +75,15 @@ public partial class ModulesView : UserControl
         }
     }
 
+    /// <summary>Todos os cards, antes do filtro.</summary>
+    private List<ModuloItem> _todos = new();
+
     private void Recarregar()
     {
         var res = Application.Current.Resources;
         var itens = new List<ModuloItem>();
         var cfg = Session.Current.Loaded;
+        var instaladosSoltos = ModulosInstaladosForaDoCatalogo();
 
         foreach (var m in ModuleCatalog.All)
         {
@@ -103,6 +115,7 @@ public partial class ModulesView : UserControl
             itens.Add(new ModuloItem
             {
                 Nome = m.DisplayName,
+                Categoria = m.Category,
                 Resumo = m.Summary,
                 Detalhes = m.Details,
                 Repositorio = m.Repository,
@@ -121,16 +134,233 @@ public partial class ModulesView : UserControl
                       + $"'{cfg!.SourceBranch}' de {cfg.SourceRepository}. Ele precisa de "
                       + $"'{m.ForkBranch}' de {m.ForkRepository} — sem isso a compilação falha."
                     : null,
+                PassoManual = m.ManualStep,
             });
         }
 
-        Lista.ItemsSource = itens;
+        // Modulos instalados por URL nao estao no catalogo, mas some-los da tela
+        // seria pior: o usuario perderia de vista o que esta compilando junto.
+        foreach (var nome in instaladosSoltos)
+        {
+            itens.Add(new ModuloItem
+            {
+                Nome = nome,
+                Categoria = ModuleCatalog.OutrosCategoria,
+                Resumo = "Instalado por URL, fora do catálogo.",
+                Detalhes = "Este módulo não faz parte da lista curada, então não há "
+                         + "descrição nem instruções aqui. Consulte o README do "
+                         + "repositório. Ele entra na compilação como qualquer outro.",
+                Repositorio = UrlDeOrigem(nome) ?? "",
+                Selo = "instalado",
+                CorSelo = (Brush)res["Ok"],
+                Acao = AcaoModulo.Nenhuma,
+                PodeInstalar = false,
+                TextoBotao = "Já instalado",
+            });
+        }
+
+        _todos = itens;
+        AplicarFiltro();
+    }
+
+    /// <summary>Pastas em modules/ que o catalogo nao conhece.</summary>
+    private List<string> ModulosInstaladosForaDoCatalogo()
+    {
+        var soltos = new List<string>();
+        if (!Directory.Exists(ModulesDir)) return soltos;
+
+        var conhecidos = ModuleCatalog.All
+            .Select(m => m.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            foreach (var dir in Directory.GetDirectories(ModulesDir))
+            {
+                var nome = Path.GetFileName(dir);
+                if (nome.StartsWith(".", StringComparison.Ordinal)) continue;
+                if (!conhecidos.Contains(nome)) soltos.Add(nome);
+            }
+        }
+        catch (Exception ex)
+        {
+            Saida.Append($"[aviso] não consegui listar {ModulesDir}: {ex.Message}");
+        }
+
+        soltos.Sort(StringComparer.OrdinalIgnoreCase);
+        return soltos;
+    }
+
+    /// <summary>De onde a pasta foi clonada, para o botao "Abrir no navegador".</summary>
+    private string? UrlDeOrigem(string nomeDaPasta)
+    {
+        try
+        {
+            var config = Path.Combine(ModulesDir, nomeDaPasta, ".git", "config");
+            if (!File.Exists(config)) return null;
+
+            foreach (var linha in File.ReadLines(config))
+            {
+                var t = linha.Trim();
+                if (!t.StartsWith("url", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var igual = t.IndexOf('=');
+                if (igual > 0) return t[(igual + 1)..].Trim();
+            }
+        }
+        catch
+        {
+            // sem a URL o card so perde um botao
+        }
+        return null;
+    }
+
+    private void Filtro_Changed(object sender, RoutedEventArgs e) => AplicarFiltro();
+
+    private void AplicarFiltro()
+    {
+        // Chamado por TextChanged, que dispara durante o InitializeComponent -
+        // antes de a lista existir.
+        if (Lista is null || CaixaFiltro is null) return;
+
+        var termo = CaixaFiltro.Text.Trim();
+        var ocultarInstalados = ChkSoNaoInstalados?.IsChecked == true;
+
+        IEnumerable<ModuloItem> visiveis = _todos;
+
+        if (ocultarInstalados)
+            visiveis = visiveis.Where(i => i.Acao != AcaoModulo.Nenhuma);
+
+        if (termo.Length > 0)
+        {
+            // Sem acentos e sem caixa: quem procura "leilao" tem que achar
+            // "Casa de Leilões".
+            var alvo = SemAcento(termo);
+            visiveis = visiveis.Where(
+                i => SemAcento(i.TextoBusca).Contains(alvo, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var lista = visiveis
+            .OrderBy(i => IndiceDaCategoria(i.Categoria))
+            .ThenBy(i => i.Nome, StringComparer.CurrentCulture)
+            .ToList();
+
+        Lista.ItemsSource = lista;
+    }
+
+    private static int IndiceDaCategoria(string categoria)
+    {
+        var i = ModuleCatalog.Categories.ToList().IndexOf(categoria);
+        return i < 0 ? int.MaxValue : i;
+    }
+
+    /// <summary>
+    /// Tira acentos para comparar. Decompor em NFD separa a letra do acento, e
+    /// os acentos ficam na categoria NonSpacingMark - basta descartar essa.
+    /// </summary>
+    private static string SemAcento(string texto)
+    {
+        var decomposto = texto.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(decomposto.Length);
+
+        foreach (var c in decomposto)
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+                != System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
     }
 
     private void Abrir_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: string url }) return;
-        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        // Modulo instalado por URL pode nao ter origem conhecida; abrir string
+        // vazia lanca Win32Exception.
+        if (sender is not Button { Tag: string url } || string.IsNullOrWhiteSpace(url))
+        {
+            Saida.Append("[aviso] não sei de onde este módulo veio");
+            return;
+        }
+        AbrirNoNavegador(url);
+    }
+
+    private void Link_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        AbrirNoNavegador(e.Uri.ToString());
+        e.Handled = true;
+    }
+
+    private void AbrirNoNavegador(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Saida.Append($"[aviso] não consegui abrir {url}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Instala um modulo que nao esta no catalogo, a partir da URL colada.
+    /// </summary>
+    private async void InstalarUrl_Click(object sender, RoutedEventArgs e)
+    {
+        var url = CaixaUrl.Text;
+
+        if (!CustomModuleUrl.TryParse(url, out var pasta, out var erro))
+        {
+            MessageBox.Show(erro, "Endereço inválido");
+            return;
+        }
+
+        if (ModuleCatalog.All.Any(m => string.Equals(m.Name, pasta, StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show(
+                $"'{pasta}' já está no catálogo — use o card dele na lista, que traz "
+                + "as instruções pós-instalação.",
+                "Já está na lista");
+            return;
+        }
+
+        if (Directory.Exists(Path.Combine(ModulesDir, pasta)))
+        {
+            MessageBox.Show($"'{pasta}' já está instalado.", "Nada a fazer");
+            return;
+        }
+
+        var aviso = CustomModuleUrl.Advice(pasta);
+        var texto = $"Instalar '{pasta}' a partir de:\n{url.Trim()}\n\n"
+                  + "Este módulo não foi testado aqui. Se ele não compilar, o servidor "
+                  + "atual continua funcionando — basta apagar a pasta e recompilar.";
+        if (aviso is not null) texto += "\n\n" + aviso;
+
+        if (MessageBox.Show(texto, "Instalar módulo de fora da lista",
+                            MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        Directory.CreateDirectory(ModulesDir);
+        var destino = Path.Combine(ModulesDir, pasta);
+
+        Saida.Append($"==> clonando {pasta}");
+        await RodarGitAsync(new[] { "clone", "--recurse-submodules", url.Trim(), destino });
+
+        if (!Directory.Exists(destino))
+        {
+            Saida.Append("[erro] o clone não criou a pasta — confira o endereço", OutputKind.Error);
+            return;
+        }
+
+        CaixaUrl.Clear();
+        Recarregar();
+
+        Saida.Append("");
+        Saida.Append("==> agora use 'Recompilar' para o módulo entrar no servidor");
+        Saida.Append("    leia o README do repositório: muitos módulos precisam de ajuste no .conf");
     }
 
     private async void Instalar_Click(object sender, RoutedEventArgs e)
@@ -363,12 +593,24 @@ public partial class ModulesView : UserControl
                     sucesso: true);
                 Saida.Append("Use a aba Servidor para iniciar.");
             }
+            else if (!progresso.Started)
+            {
+                // Nada foi compilado: uma verificacao barrou antes. Mandar
+                // procurar linha com 'error' aqui so faria perder tempo - a
+                // causa ja esta escrita, e e uma linha so.
+                Saida.AppendBanner("A COMPILAÇÃO NEM COMEÇOU", sucesso: false);
+                if (progresso.FirstFailure is not null)
+                    Saida.Append("Motivo: " + progresso.FirstFailure, OutputKind.Error);
+                Saida.Append("Nada foi alterado. Resolva o que está acima e clique em Recompilar de novo.");
+            }
             else
             {
                 Saida.AppendBanner(
                     $"COMPILAÇÃO FALHOU após {duracao:hh\\:mm\\:ss} — {progresso.Errors} erro(s)",
                     sucesso: false);
-                Saida.Append("Procure a PRIMEIRA linha com 'error' — as seguintes costumam ser consequência.");
+                if (progresso.FirstFailure is not null)
+                    Saida.Append("Primeiro erro: " + progresso.FirstFailure, OutputKind.Error);
+                Saida.Append("Os erros seguintes costumam ser consequência desse.");
                 Saida.Append("Use 'copiar' ou 'salvar...' aqui em cima para levar o log inteiro.");
             }
         }
