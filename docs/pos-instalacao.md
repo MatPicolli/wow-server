@@ -179,10 +179,91 @@ cd C:\AzerothCore\wow-server
 Vários módulos trazem SQL próprio e um `.conf.dist` que precisa virar `.conf`
 em `server\configs\`. Leia o README de cada um.
 
-Pra jogar sozinho, o mais popular é o
-[mod-playerbots](https://github.com/liyunfan1223/mod-playerbots) — bots que
-formam grupo e raide com você. Ele fica num fork do core, então exige um clone
-diferente; siga o README dele.
+## Bots e casa de leilões
+
+Existem duas categorias, com custos de instalação bem diferentes.
+
+### Casa de leilões — módulo simples
+
+[**mod-ah-bot**](https://github.com/azerothcore/mod-ah-bot), da org oficial.
+Popula a AH com itens e compra o que os jogadores colocam à venda, então o
+leilão deixa de ser um deserto num servidor de uma pessoa só.
+
+```powershell
+cd C:\AzerothCore\source\modules
+git clone https://github.com/azerothcore/mod-ah-bot.git
+
+cd C:\Users\Mateus\Documents\Projetos\AI\wow-server
+.\scripts\03-build.ps1
+.\scripts\06-deploy.ps1
+.\scripts\07-configure.ps1
+```
+
+Ele precisa de uma **conta e um personagem dedicados** — é essa identidade que
+aparece como vendedora. Crie no console do worldserver:
+
+```
+account create ahbot umasenhaqualquer
+```
+
+Entre com ela uma vez, crie um personagem, saia. Depois pegue os IDs:
+
+```sql
+SELECT id FROM acore_auth.account WHERE username = 'AHBOT';
+SELECT guid, name FROM acore_characters.characters WHERE account = <id_acima>;
+```
+
+E preencha em `server\configs\modules\mod_ahbot.conf`. O personagem não é pra
+ser jogado.
+
+### Bots que jogam — exigem fork do core
+
+Estes **não são módulos**: mexem no core e por isso vivem em repositórios
+próprios.
+
+| | O que é | Repositório / branch |
+|---|---|---|
+| **Playerbots** | Bots que agem como personagens reais: fazem quest, sobem de nível, entram no seu grupo e raide. Dá pra logar seus próprios alts como bots. | [`mod-playerbots/azerothcore-wotlk`](https://github.com/mod-playerbots/azerothcore-wotlk) branch `Playerbot` + módulo [`mod-playerbots`](https://github.com/mod-playerbots/mod-playerbots) |
+| **NPCBots** | Companheiros contratados como NPC. Mais leve, menos "vivo" — não fazem quest sozinhos. | [`trickerer/AzerothCore-wotlk-with-NPCBots`](https://github.com/trickerer/AzerothCore-wotlk-with-NPCBots) branch `npcbots_3.3.5` |
+
+São **mutuamente exclusivos** — cada um é um fork diferente do core.
+
+Pra trocar, edite o `config\settings.psd1`:
+
+```powershell
+SourceRepository = 'https://github.com/mod-playerbots/azerothcore-wotlk.git'
+SourceBranch     = 'Playerbot'
+```
+
+E então:
+
+```powershell
+.\scripts\02-clone-source.ps1 -Force   # apaga e clona o fork
+cd C:\AzerothCore\source\modules
+git clone https://github.com/mod-playerbots/mod-playerbots.git
+
+cd C:\Users\Mateus\Documents\Projetos\AI\wow-server
+.\scripts\03-build.ps1
+.\scripts\06-deploy.ps1
+.\scripts\07-configure.ps1
+.\scripts\start-server.ps1
+```
+
+O `-Force` é obrigatório ao trocar de repositório: sem ele o script se recusa
+a atualizar um checkout que aponta pra outro lugar, justamente pra não te
+devolver ao core oficial sem avisar.
+
+**O que você perde e o que mantém ao trocar de fork:**
+
+- Refaz: clone (~1,3 GB) e compilação — junto, algo em torno de 20 minutos.
+- **Mantém**: os dados extraídos do client (`dbc`, `maps`, `vmaps`, `mmaps`).
+  São dados do seu WoW, não do core — as horas de mmaps não se repetem.
+- **Mantém**: seus personagens. O auto-updater aplica o schema novo por cima
+  do banco existente. Ainda assim, backup antes:
+  ```powershell
+  mysqldump -u acore -pacore --databases acore_characters acore_auth `
+      --single-transaction --result-file=C:\backups\antes-do-fork.sql
+  ```
 
 ### Rendimento de profissões (minério, erva, pesca, couro)
 

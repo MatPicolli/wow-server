@@ -23,6 +23,29 @@
     ClientDir = 'C:\Games\World of Warcraft 3.3.5a'
 
     # -------------------------------------------------------------------------
+    # De onde vem o codigo-fonte do core.
+    #
+    # Alguns mods de bot nao sao modulos: eles precisam de alteracoes no
+    # proprio core e por isso vivem num fork. Trocar aqui e o jeito certo -
+    # assim o 02-clone-source.ps1 nao te devolve pro repositorio antigo na
+    # proxima atualizacao.
+    #
+    #   AzerothCore oficial (padrao):
+    #     'https://github.com/azerothcore/azerothcore-wotlk.git'  branch 'master'
+    #
+    #   Playerbots (bots que jogam como personagens de verdade):
+    #     'https://github.com/mod-playerbots/azerothcore-wotlk.git'  branch 'Playerbot'
+    #
+    #   NPCBots (bots contratados como companheiros):
+    #     'https://github.com/trickerer/AzerothCore-wotlk-with-NPCBots.git'  branch 'npcbots_3.3.5'
+    #
+    # Trocar de repositorio exige clonar de novo e recompilar:
+    #     .\scripts\02-clone-source.ps1 -Force
+    # -------------------------------------------------------------------------
+    SourceRepository = 'https://github.com/azerothcore/azerothcore-wotlk.git'
+    SourceBranch     = 'master'
+
+    # -------------------------------------------------------------------------
     # Banco de dados
     # -------------------------------------------------------------------------
     MySql = @{

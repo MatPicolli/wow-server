@@ -52,6 +52,8 @@ function Import-ServerSettings {
     # hashtable lanca excecao - nao devolve $null. Entao as chaves opcionais
     # ganham default aqui, e o resto do codigo pode usar $settings.X a vontade.
     $defaults = @{
+        SourceRepository = 'https://github.com/azerothcore/azerothcore-wotlk.git'
+        SourceBranch     = 'master'
         BuildConfig  = 'RelWithDebInfo'
         Threads      = 0
         BoostDir     = 'C:\local\boost'
