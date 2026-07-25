@@ -44,7 +44,12 @@
     Restaura os valores originais e esquece o backup.
 
 .PARAMETER MaxStack
-    Teto por seguranca (padrao 255). Nao adianta pedir 10000 minerios.
+    Teto por item (padrao e o maximo, 255).
+
+    255 nao e escolha arbitraria: MinCount/MaxCount sao tinyint unsigned no
+    banco e uint8 no core, entao 255 e o limite fisico. Se algum valor bater
+    no teto, o script avisa quantas linhas foram limitadas em vez de aplicar
+    um multiplicador menor sem falar nada.
 
 .EXAMPLE
     .\scripts\tune-professions.ps1 -Mining 3 -Herbalism 3
@@ -83,7 +88,12 @@ param(
 
     [switch]$Apply,
     [switch]$Reset,
+
+    # 255 e o teto absoluto: MinCount/MaxCount sao tinyint unsigned no banco e
+    # uint8 no core. Pedir mais que isso nao existe.
+    [ValidateRange(1, 255)]
     [int]$MaxStack = 255,
+
     [string]$OutFile
 )
 
@@ -266,6 +276,25 @@ SELECT it2.name AS Item, b.MinCount AS DeMin, b.MaxCount AS DeMax,
 "@
     Write-Info 'exemplos:'
     Write-Host $exemplos -ForegroundColor DarkGray
+
+    # Bater no teto e silenciosamente entregar menos do que foi pedido seria
+    # enganoso - o usuario acharia que aplicou 10x. Melhor dizer.
+    $clamped = Invoke-World -Sql @"
+SELECT COUNT(*) AS n
+  FROM ``$($p.Table)`` t
+  JOIN ``$backup`` b ON b.LootTable = '$($p.Table)' AND b.Entry = t.Entry AND b.Item = t.Item
+  $join
+ WHERE $($p.Where)
+   AND ROUND(b.MaxCount * $($p.Rate)) > $MaxStack;
+"@
+    $n = 0
+    $ultimaLinha = ($clamped -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -Last 1)
+    if ($ultimaLinha -match '^\s*(\d+)\s*$') { $n = [int]$Matches[1] }
+
+    if ($n -gt 0) {
+        Write-Warn "$n linha(s) passariam de $MaxStack e serao limitadas a $MaxStack."
+        Write-Warn "Nessas, o multiplicador efetivo fica MENOR que x$($p.Rate)."
+    }
 
     $update = @"
 UPDATE ``$($p.Table)`` t
