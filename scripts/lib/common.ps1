@@ -240,6 +240,21 @@ function Get-MySqlExe {
     return $null
 }
 
+function Get-MySqlDumpExe {
+    foreach ($name in @('mysqldump.exe', 'mariadb-dump.exe')) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd) { return $cmd.Source }
+    }
+    $dir = Find-MySqlDir
+    if ($dir) {
+        foreach ($name in @('mysqldump.exe', 'mariadb-dump.exe')) {
+            $exe = Join-Path $dir "bin\$name"
+            if (Test-Path $exe) { return $exe }
+        }
+    }
+    return $null
+}
+
 function Invoke-MySql {
     <#
         Executa SQL e devolve a saida como texto.

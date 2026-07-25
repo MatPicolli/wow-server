@@ -138,22 +138,39 @@ Um servidor pra você não precisa disso. Se for só seu, deixe em
 O que importa é o banco. Os binários e os dados extraídos você refaz.
 
 ```powershell
-$data = Get-Date -Format 'yyyy-MM-dd'
-mysqldump -u acore -pacore --databases acore_characters acore_auth `
-    --single-transaction --result-file="C:\backups\wow-$data.sql"
+.\scripts\backup-db.ps1
 ```
 
-`acore_characters` tem seus personagens; `acore_auth` tem as contas.
-`acore_world` é conteúdo do jogo e é recriado pelo updater — não precisa
-guardar.
-
-Pra restaurar:
+Salva em `C:\AzerothCore\backups\wow-<data>.sql` e mantém os 10 mais recentes.
+**Pode rodar com o servidor ligado** — o `--single-transaction` tira um retrato
+consistente sem travar as tabelas.
 
 ```powershell
-mysql -u root -p < C:\backups\wow-2026-07-24.sql
+.\scripts\backup-db.ps1 -IncludeWorld     # inclui suas customizações de itens/NPCs/loot
+.\scripts\backup-db.ps1 -KeepLast 30
 ```
 
-Dá pra agendar isso no Agendador de Tarefas do Windows.
+`acore_characters` tem seus personagens; `acore_auth` tem as contas. Esses dois
+são insubstituíveis. `acore_world` é conteúdo do jogo, recriado pelo updater —
+só vale guardar se você já customizou coisas direto no banco.
+
+Pra restaurar (com o servidor **desligado**):
+
+```powershell
+.\scripts\stop-server.ps1
+mysql -u root -p < C:\AzerothCore\backups\wow-2026-07-25_1430.sql
+```
+
+### Automatizando
+
+No Agendador de Tarefas do Windows, ou via PowerShell como Administrador:
+
+```powershell
+$acao = New-ScheduledTaskAction -Execute 'powershell.exe' `
+    -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\Users\Mateus\Documents\Projetos\AI\wow-server\scripts\backup-db.ps1"'
+$gatilho = New-ScheduledTaskTrigger -Daily -At 4am
+Register-ScheduledTask -TaskName 'Backup WoW' -Action $acao -Trigger $gatilho
+```
 
 ---
 
