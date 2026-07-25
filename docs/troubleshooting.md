@@ -17,18 +17,42 @@ Barras **normais**, sem barra no fim. Feche e reabra o PowerShell depois.
 Se persistir, confira que você baixou o binário do toolset certo:
 `msvc-14.3` para Visual Studio 2022.
 
-### `Could NOT find OpenSSL` ou erro de link em `libcrypto`
+### `Could NOT find OpenSSL`, erro de link em `libcrypto`, ou "não gerou libcrypto-3-x64.dll"
 
-Você provavelmente instalou o OpenSSL **4.x** ou a versão **Light**.
-
-O AzerothCore precisa da linha **3.x** completa. Confira:
+Você tem o OpenSSL **4.x** ou a versão **Light** instalada. O AzerothCore
+linka contra `libcrypto-3-x64.dll` e `libssl-3-x64.dll`, que só existem na
+linha **3.x**. Confira:
 
 ```powershell
 Test-Path 'C:\Program Files\OpenSSL-Win64\bin\libcrypto-3-x64.dll'
 ```
 
-Se der `False`, desinstale e baixe a "Win64 OpenSSL v3.x.x" (não Light) em
-<https://slproweb.com/products/Win32OpenSSL.html>.
+Se der `False`, troque pela 3.x (PowerShell como Administrador):
+
+```powershell
+winget uninstall --id ShiningLight.OpenSSL.Dev --exact
+
+winget install --id ShiningLight.OpenSSL.Dev --exact --version 3.6.2 `
+    --accept-package-agreements --accept-source-agreements
+```
+
+Se o winget disser que não achou a 3.6.2 — o slproweb tira instaladores
+antigos do ar de vez em quando — veja quais ainda existem e escolha a 3.x mais
+alta:
+
+```powershell
+winget show --id ShiningLight.OpenSSL.Dev --versions
+```
+
+Última alternativa, na mão: baixe a **"Win64 OpenSSL v3.x.x"** (não a *Light*)
+em <https://slproweb.com/products/Win32OpenSSL.html>. Na instalação, escolha
+copiar as DLLs para **"The OpenSSL binaries (/bin) directory"**.
+
+> Por que o script erra sozinho: o pacote `ShiningLight.OpenSSL.Dev` do winget
+> já avançou pra 4.x, e não existe um `ShiningLight.OpenSSL.LTS.Dev` — a linha
+> LTS só publica a variante *Light*, sem os headers. Por isso o
+> `01-install-prereqs.ps1` fixa uma versão 3.x explícita, e você pode
+> sobrescrever com `-OpenSslVersion`.
 
 ### `cannot open input file 'libmysql.lib'`
 
