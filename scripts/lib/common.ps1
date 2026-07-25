@@ -268,18 +268,40 @@ function Invoke-MySql {
     if ($Password) { $mysqlArgs += "--password=$Password" }
     if ($Database) { $mysqlArgs += $Database }
 
-    if ($File) {
-        $out = Get-Content -Raw -LiteralPath $File | & $exe @mysqlArgs 2>&1
-    } else {
-        $mysqlArgs += @('-e', $Sql)
-        $out = & $exe @mysqlArgs 2>&1
+    # Com $ErrorActionPreference = 'Stop', o '2>&1' de um comando nativo faz o
+    # PowerShell transformar cada linha de stderr em excecao na hora - antes de
+    # chegarmos no teste do $LASTEXITCODE. O resultado e que a mensagem real do
+    # mysql ("Access denied", "Can't connect") se perdia e o usuario so via o
+    # texto generico do catch. Aqui soltamos a preferencia so nesta chamada.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $code = -1
+    try {
+        if ($File) {
+            $out = Get-Content -Raw -LiteralPath $File | & $exe @mysqlArgs 2>&1
+        } else {
+            $mysqlArgs += @('-e', $Sql)
+            $out = & $exe @mysqlArgs 2>&1
+        }
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
     }
 
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host ($out | Out-String) -ForegroundColor DarkGray
-        Write-Fail "Comando MySQL falhou (exit code $LASTEXITCODE)."
+    $text = ($out | Out-String).Trim()
+
+    if ($code -ne 0) {
+        if ($text) {
+            Write-Host ''
+            Write-Host '    resposta do mysql.exe:' -ForegroundColor Yellow
+            foreach ($line in ($text -split "`r?`n")) {
+                Write-Host "      $line" -ForegroundColor Gray
+            }
+            Write-Host ''
+        }
+        throw "mysql.exe falhou (exit code $code)."
     }
-    return ($out | Out-String)
+    return $text
 }
 
 function Read-MySqlRootPassword {

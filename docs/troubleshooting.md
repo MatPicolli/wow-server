@@ -162,6 +162,67 @@ Faltam DLLs. Rode `.\scripts\06-deploy.ps1` de novo, ou confira que estão em
 Pra ver o erro de verdade, rode pelo PowerShell em vez de dar duplo-clique — a
 mensagem fica na tela.
 
+### Não sei a senha do root do MySQL / `Access denied for user 'root'`
+
+Acontece quando o MySQL foi instalado em modo silencioso (via `winget`), sem o
+assistente de configuração ter rodado.
+
+Primeiro veja o erro exato:
+
+```powershell
+& 'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe' `
+    -u root -p -h 127.0.0.1 --protocol=TCP -e "SELECT 1;"
+```
+
+- **`Access denied`** → o servidor está de pé, a senha é que está errada.
+  Siga o reset abaixo.
+- **`Can't connect`** → o serviço não está rodando ou está em outra porta.
+  `Get-Service MySQL*` e `Start-Service <nome>`.
+
+#### Resetando a senha do root
+
+O passo que quase todo tutorial erra: o `mysqld.exe` precisa do
+**`--defaults-file`**. Sem ele, o servidor ignora o `my.ini` e tenta usar
+`C:\Program Files\MySQL\MySQL Server 8.4\data\`, que não existe — o datadir
+real fica em `C:\ProgramData\`. O sintoma é abortar em menos de um segundo:
+
+```
+[ERROR] [MY-013276] Failed to set datadir to
+'C:\Program Files\MySQL\MySQL Server 8.4\data\' (OS errno: 2 - No such file or directory)
+```
+
+Descubra o `my.ini` que o serviço realmente usa:
+
+```powershell
+Get-CimInstance Win32_Service -Filter "Name='MySQL84'" |
+    Select-Object -ExpandProperty PathName
+```
+
+A saída traz o `--defaults-file=...`. Use esse caminho (PowerShell como
+Administrador):
+
+```powershell
+Stop-Service MySQL84
+
+Set-Content -Path C:\mysql-reset.txt -Encoding ASCII `
+    -Value "ALTER USER 'root'@'localhost' IDENTIFIED BY 'SuaSenhaNova';"
+
+& 'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe' `
+    --defaults-file="C:\ProgramData\MySQL\MySQL Server 8.4\my.ini" `
+    --init-file=C:\mysql-reset.txt --console
+```
+
+Espere aparecer **`ready for connections`** — se sair em menos de um segundo,
+o caminho do `--defaults-file` está errado. Então `Ctrl+C` e:
+
+```powershell
+Remove-Item C:\mysql-reset.txt
+Start-Service MySQL84
+```
+
+Alternativa sem linha de comando: abra o **MySQL Installer** → **Reconfigure**
+no MySQL Server e defina a senha pelo assistente.
+
 ### `Could not connect to MySQL database` / `Access denied for user 'acore'`
 
 1. O serviço do MySQL está rodando? `Get-Service MySQL*`

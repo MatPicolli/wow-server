@@ -33,7 +33,7 @@ try {
     Invoke-MySql -Settings $settings -User $m.RootUser -Password $RootPassword -Sql 'SELECT VERSION();' | Out-Null
 } catch {
     Write-Fail "Nao consegui conectar como '$($m.RootUser)'." `
-               "Confira se o servico MySQL esta rodando (services.msc) e se a senha do root esta certa."
+               "Leia a 'resposta do mysql.exe' acima. 'Access denied' = senha errada; 'Can't connect' = servico parado ou porta diferente. Veja docs\troubleshooting.md."
 }
 Write-Ok "conectado"
 
