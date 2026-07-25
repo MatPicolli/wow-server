@@ -88,27 +88,52 @@ function Test-ExtractedDir {
     return (Test-Path $p) -and ((Get-ChildItem $p -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0)
 }
 
+# Marcador gravado na pasta de saida quando uma etapa termina de verdade.
+# "Tem arquivo na pasta" nao serve como criterio: se a geracao for interrompida
+# no meio (Ctrl+C durante as horas de mmaps), a pasta fica com resultado
+# parcial e a etapa seria considerada pronta - deixando o servidor com
+# pathfinding pela metade, sem aviso nenhum.
+$StageMarker = '.extract-complete'
+
+function Set-StageComplete {
+    param([string]$Name)
+    $dir = Join-Path $client $Name
+    if (Test-Path $dir) {
+        Set-Content -LiteralPath (Join-Path $dir $StageMarker) `
+                    -Value (Get-Date -Format 'o') -Encoding ASCII
+    }
+}
+
 function Test-StageComplete {
     <#
-        "Tem arquivo na pasta" nao serve pra vmaps e mmaps: se a geracao for
-        interrompida no meio (Ctrl+C durante as horas de mmaps), a pasta fica
-        com resultado parcial e a etapa seria considerada pronta - deixando o
-        servidor com pathfinding pela metade, sem aviso nenhum.
-
-        Aqui exigimos um arquivo-indice por mapa (.vmtree / .mmap). Se nao der
-        pra saber quantos mapas existem, cai no teste antigo.
+        -IndexFilter/-ExpectedTotal sao um plano B pra instalacoes que ja
+        existiam antes do marcador: um arquivo-indice por mapa (.vmtree /
+        .mmap) sugere que a etapa terminou. E so heuristica - nem todo mapa
+        necessariamente gera indice - entao o marcador manda.
     #>
-    param([string]$Name, [string]$IndexFilter, [int]$ExpectedTotal)
+    param([string]$Name, [string]$IndexFilter, [int]$ExpectedTotal = 0)
 
     $dir = Join-Path $client $Name
     if (-not (Test-Path $dir)) { return $false }
-    if ($ExpectedTotal -le 0) { return (Test-ExtractedDir $Name) }
 
-    $done = Get-FileCount -Path $dir -Filter $IndexFilter
-    if ($done -ge $ExpectedTotal) { return $true }
+    if (Test-Path (Join-Path $dir $StageMarker)) { return $true }
 
-    if ($done -gt 0) {
-        Write-Warn "$Name esta incompleto ($done de $ExpectedTotal mapas) - provavelmente foi interrompido. Vou continuar de onde parou."
+    $hasFiles = Test-ExtractedDir $Name
+
+    if ($IndexFilter -and $ExpectedTotal -gt 0) {
+        $done = Get-FileCount -Path $dir -Filter $IndexFilter
+        if ($done -ge $ExpectedTotal) {
+            Set-StageComplete -Name $Name   # adota o que ja estava pronto
+            return $true
+        }
+        if ($done -gt 0) {
+            Write-Warn "$Name parece incompleto ($done de $ExpectedTotal mapas com indice) - vou rodar de novo."
+            return $false
+        }
+    }
+
+    if ($hasFiles) {
+        Write-Warn "$Name tem arquivos mas nao foi marcado como concluido - provavelmente interrompido. Vou rodar de novo."
     }
     return $false
 }
@@ -153,24 +178,27 @@ $doMmaps = ((-not $Only) -or $Only -eq 'mmaps') -and $settings.ExtractMmaps -and
 # --- 1. dbc + maps + Cameras -----------------------------------------------
 if ($doMaps) {
     Write-Step "1/4  dbc, maps e Cameras  (~5-15 min)"
-    if ((Test-ExtractedDir 'dbc') -and (Test-ExtractedDir 'maps') -and -not $Force) {
+    if ((Test-StageComplete -Name 'maps') -and (Test-ExtractedDir 'dbc') -and -not $Force) {
         Write-Ok "ja extraido, pulando (use -Force pra refazer)"
     } else {
         if (-not $exeMapExtractor) { Write-Fail "Extractor de mapas nao encontrado em '$binDir'." "Rode 03-build.ps1." }
         Invoke-Extractor -Exe $exeMapExtractor -Label 'Extraindo dbc e maps' `
                          -WatchDir (Join-Path $client 'maps') -WatchFilter '*.map'
+        Set-StageComplete -Name 'maps'
+        Set-StageComplete -Name 'dbc'
     }
 }
 
 # --- 2. Buildings ----------------------------------------------------------
 if ($doVmaps) {
     Write-Step "2/4  Buildings, materia-prima dos vmaps  (~20-40 min)"
-    if ((Test-ExtractedDir 'Buildings') -and -not $Force) {
+    if ((Test-StageComplete -Name 'Buildings') -and -not $Force) {
         Write-Ok "ja extraido, pulando"
     } else {
         if (-not $exeVmapExtractor) { Write-Fail "Extractor de vmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
         Invoke-Extractor -Exe $exeVmapExtractor -Label 'Extraindo Buildings' `
                          -WatchDir (Join-Path $client 'Buildings') -WatchFilter '*'
+        Set-StageComplete -Name 'Buildings'
     }
 
     # --- 3. montar os vmaps ------------------------------------------------
@@ -182,6 +210,7 @@ if ($doVmaps) {
         if (-not $exeVmapAssembler) { Write-Fail "Montador de vmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
         Invoke-Extractor -Exe $exeVmapAssembler -Arguments @('Buildings', 'vmaps') -Label 'Montando vmaps' `
                          -WatchDir (Join-Path $client 'vmaps') -WatchFilter '*.vmtree' -ExpectedTotal $mapCount
+        Set-StageComplete -Name 'vmaps'
     }
 }
 
@@ -204,6 +233,7 @@ if ($doMmaps) {
         if (-not $exeMmapsGenerator) { Write-Fail "Gerador de mmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
         Invoke-Extractor -Exe $exeMmapsGenerator -Arguments @('--threads', "$threads") -Label 'Gerando mmaps' `
                          -WatchDir (Join-Path $client 'mmaps') -WatchFilter '*.mmap' -ExpectedTotal $mapCount
+        Set-StageComplete -Name 'mmaps'
     }
 }
 
@@ -215,6 +245,10 @@ $moved = @()
 foreach ($folder in @('dbc', 'maps', 'vmaps', 'mmaps', 'Cameras')) {
     $from = Join-Path $client $folder
     if (-not (Test-Path $from)) { continue }
+
+    # o marcador e controle interno da extracao; nao tem o que fazer em Data\
+    $marker = Join-Path $from $StageMarker
+    if (Test-Path $marker) { Remove-Item $marker -Force -ErrorAction SilentlyContinue }
 
     $to = Join-Path $dataDir $folder
     if (Test-Path $to) {

@@ -386,6 +386,11 @@ function Invoke-ProcessWithProgress {
     $proc    = Start-Process @startParams
     $started = Get-Date
 
+    # Ler .Handle uma vez faz o objeto Process guardar o handle nativo. Sem
+    # isso o .ExitCode volta $null depois que o processo termina, e um
+    # comando que funcionou perfeitamente acaba reportado como falha.
+    try { $null = $proc.Handle } catch { }
+
     try {
         while (-not $proc.HasExited) {
             Start-Sleep -Seconds $PollSeconds
@@ -417,7 +422,14 @@ function Invoke-ProcessWithProgress {
     }
 
     $proc.WaitForExit()
-    return $proc.ExitCode
+
+    $code = $proc.ExitCode
+    if ($null -eq $code) {
+        Write-Warn "Nao consegui ler o exit code de $([IO.Path]::GetFileName($FilePath)) - assumindo sucesso."
+        Write-Warn "A conferencia no fim da etapa valida o resultado de verdade."
+        $code = 0
+    }
+    return $code
 }
 
 function Write-TextFileNoBom {
