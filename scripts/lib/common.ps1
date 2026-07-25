@@ -313,6 +313,113 @@ function Read-MySqlRootPassword {
 
 # ------------------------------------------------------------ diversos -----
 
+function Get-ExtractedMapCount {
+    <#
+        Quantos mapas distintos existem na pasta 'maps' extraida.
+
+        Os arquivos seguem o padrao <mapId 3 digitos><tileX 2><tileY 2>.map,
+        entao os 3 primeiros caracteres identificam o mapa. Esse numero e a
+        base pra saber quantos .vmtree e .mmap devem existir no fim.
+        Devolve 0 se nao der pra determinar.
+    #>
+    param([string]$MapsDir)
+
+    if (-not $MapsDir -or -not (Test-Path $MapsDir)) { return 0 }
+
+    $ids = New-Object 'System.Collections.Generic.HashSet[string]'
+    try {
+        foreach ($f in [IO.Directory]::EnumerateFiles($MapsDir, '*.map')) {
+            $name = [IO.Path]::GetFileNameWithoutExtension($f)
+            if ($name.Length -ge 3) { [void]$ids.Add($name.Substring(0, 3)) }
+        }
+    } catch { return 0 }
+
+    return $ids.Count
+}
+
+function Get-FileCount {
+    <#
+        Conta arquivos rapido (sem Get-ChildItem, que fica caro em pastas com
+        dezenas de milhares de arquivos e seria consultado a cada poucos
+        segundos durante a extracao).
+    #>
+    param([string]$Path, [string]$Filter = '*')
+
+    if (-not $Path -or -not (Test-Path $Path)) { return 0 }
+    try   { return ([IO.Directory]::GetFiles($Path, $Filter)).Length }
+    catch { return 0 }
+}
+
+function Invoke-ProcessWithProgress {
+    <#
+        Roda um executavel mostrando uma barra de progresso enquanto ele
+        trabalha, e devolve o exit code.
+
+        O processo continua ligado ao console (sem redirecionar saida), entao
+        ele imprime normalmente e nada muda no comportamento dele - inclusive
+        se pedir tecla no fim. A barra do Write-Progress e desenhada numa area
+        separada, no topo, sem se misturar com essa saida.
+
+        O progresso vem de contar arquivos que vao aparecendo em -WatchDir.
+        Com -ExpectedTotal > 0 sai porcentagem e estimativa de tempo restante;
+        sem ele, so contador e tempo decorrido.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [Parameter(Mandatory)][string]$WorkingDirectory,
+        [Parameter(Mandatory)][string]$Activity,
+        [string]$WatchDir,
+        [string]$WatchFilter = '*',
+        [int]$ExpectedTotal = 0,
+        [int]$PollSeconds = 5
+    )
+
+    $startParams = @{
+        FilePath         = $FilePath
+        WorkingDirectory = $WorkingDirectory
+        NoNewWindow      = $true
+        PassThru         = $true
+    }
+    if ($Arguments.Count -gt 0) { $startParams['ArgumentList'] = $Arguments }
+
+    $proc    = Start-Process @startParams
+    $started = Get-Date
+
+    try {
+        while (-not $proc.HasExited) {
+            Start-Sleep -Seconds $PollSeconds
+
+            $elapsed = (Get-Date) - $started
+            $count   = Get-FileCount -Path $WatchDir -Filter $WatchFilter
+            $status  = "{0:hh\:mm\:ss} decorrido" -f $elapsed
+
+            if ($ExpectedTotal -gt 0) {
+                $status += " | $count de $ExpectedTotal"
+                $pct = [math]::Min(100, [math]::Max(0, [int](($count / $ExpectedTotal) * 100)))
+
+                # ETA por regra de tres simples: so faz sentido depois que
+                # alguns itens ficaram prontos
+                if ($count -ge 2 -and $count -lt $ExpectedTotal) {
+                    $perItem   = $elapsed.TotalSeconds / $count
+                    $remaining = [TimeSpan]::FromSeconds($perItem * ($ExpectedTotal - $count))
+                    $status   += (" | faltam ~{0:hh\:mm}" -f $remaining)
+                }
+
+                Write-Progress -Activity $Activity -Status $status -PercentComplete $pct
+            } else {
+                if ($count -gt 0) { $status += " | $count arquivos gerados" }
+                Write-Progress -Activity $Activity -Status $status
+            }
+        }
+    } finally {
+        Write-Progress -Activity $Activity -Completed
+    }
+
+    $proc.WaitForExit()
+    return $proc.ExitCode
+}
+
 function Write-TextFileNoBom {
     <#
         Set-Content -Encoding UTF8 grava BOM no Windows PowerShell 5.1, e o

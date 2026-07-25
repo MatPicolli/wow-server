@@ -88,12 +88,62 @@ function Test-ExtractedDir {
     return (Test-Path $p) -and ((Get-ChildItem $p -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0)
 }
 
+function Test-StageComplete {
+    <#
+        "Tem arquivo na pasta" nao serve pra vmaps e mmaps: se a geracao for
+        interrompida no meio (Ctrl+C durante as horas de mmaps), a pasta fica
+        com resultado parcial e a etapa seria considerada pronta - deixando o
+        servidor com pathfinding pela metade, sem aviso nenhum.
+
+        Aqui exigimos um arquivo-indice por mapa (.vmtree / .mmap). Se nao der
+        pra saber quantos mapas existem, cai no teste antigo.
+    #>
+    param([string]$Name, [string]$IndexFilter, [int]$ExpectedTotal)
+
+    $dir = Join-Path $client $Name
+    if (-not (Test-Path $dir)) { return $false }
+    if ($ExpectedTotal -le 0) { return (Test-ExtractedDir $Name) }
+
+    $done = Get-FileCount -Path $dir -Filter $IndexFilter
+    if ($done -ge $ExpectedTotal) { return $true }
+
+    if ($done -gt 0) {
+        Write-Warn "$Name esta incompleto ($done de $ExpectedTotal mapas) - provavelmente foi interrompido. Vou continuar de onde parou."
+    }
+    return $false
+}
+
 function Invoke-Extractor {
-    param([string]$Exe, [string[]]$Arguments = @(), [string]$Label)
+    param(
+        [string]$Exe,
+        [string[]]$Arguments = @(),
+        [string]$Label,
+        [string]$WatchDir,
+        [string]$WatchFilter = '*',
+        [int]$ExpectedTotal = 0
+    )
+
     Write-Info "rodando $Exe ..."
     $started = Get-Date
-    Invoke-Checked -FilePath (Join-Path $client $Exe) -Arguments $Arguments -WorkingDirectory $client -What $Label
+
+    $code = Invoke-ProcessWithProgress `
+                -FilePath (Join-Path $client $Exe) `
+                -Arguments $Arguments `
+                -WorkingDirectory $client `
+                -Activity $Label `
+                -WatchDir $WatchDir `
+                -WatchFilter $WatchFilter `
+                -ExpectedTotal $ExpectedTotal
+
+    if ($code -ne 0) { Write-Fail "$Label falhou (exit code $code)." }
     Write-Ok ("$Label concluido em {0:hh\:mm\:ss}" -f ((Get-Date) - $started))
+}
+
+# Quantos mapas o client tem. Vira o total das barras de vmaps e mmaps, e a
+# base pra saber se essas etapas terminaram mesmo.
+$mapCount = Get-ExtractedMapCount -MapsDir (Join-Path $client 'maps')
+if ($mapCount -eq 0) {
+    $mapCount = Get-ExtractedMapCount -MapsDir (Join-Path $dataDir 'maps')
 }
 
 $doMaps  = (-not $Only) -or $Only -eq 'maps'
@@ -107,7 +157,8 @@ if ($doMaps) {
         Write-Ok "ja extraido, pulando (use -Force pra refazer)"
     } else {
         if (-not $exeMapExtractor) { Write-Fail "Extractor de mapas nao encontrado em '$binDir'." "Rode 03-build.ps1." }
-        Invoke-Extractor -Exe $exeMapExtractor -Label 'extracao de dbc/maps'
+        Invoke-Extractor -Exe $exeMapExtractor -Label 'Extraindo dbc e maps' `
+                         -WatchDir (Join-Path $client 'maps') -WatchFilter '*.map'
     }
 }
 
@@ -118,24 +169,26 @@ if ($doVmaps) {
         Write-Ok "ja extraido, pulando"
     } else {
         if (-not $exeVmapExtractor) { Write-Fail "Extractor de vmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
-        Invoke-Extractor -Exe $exeVmapExtractor -Label 'extracao de Buildings'
+        Invoke-Extractor -Exe $exeVmapExtractor -Label 'Extraindo Buildings' `
+                         -WatchDir (Join-Path $client 'Buildings') -WatchFilter '*'
     }
 
     # --- 3. montar os vmaps ------------------------------------------------
     Write-Step "3/4  Montando os vmaps  (~5-10 min)"
-    if ((Test-ExtractedDir 'vmaps') -and -not $Force) {
+    if ((Test-StageComplete -Name 'vmaps' -IndexFilter '*.vmtree' -ExpectedTotal $mapCount) -and -not $Force) {
         Write-Ok "ja montado, pulando"
     } else {
         New-DirectoryIfMissing (Join-Path $client 'vmaps')
         if (-not $exeVmapAssembler) { Write-Fail "Montador de vmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
-        Invoke-Extractor -Exe $exeVmapAssembler -Arguments @('Buildings', 'vmaps') -Label 'montagem dos vmaps'
+        Invoke-Extractor -Exe $exeVmapAssembler -Arguments @('Buildings', 'vmaps') -Label 'Montando vmaps' `
+                         -WatchDir (Join-Path $client 'vmaps') -WatchFilter '*.vmtree' -ExpectedTotal $mapCount
     }
 }
 
 # --- 4. mmaps --------------------------------------------------------------
 if ($doMmaps) {
     Write-Step "4/4  mmaps - pathfinding  (1-6 HORAS)"
-    if ((Test-ExtractedDir 'mmaps') -and -not $Force) {
+    if ((Test-StageComplete -Name 'mmaps' -IndexFilter '*.mmap' -ExpectedTotal $mapCount) -and -not $Force) {
         Write-Ok "ja extraido, pulando"
     } else {
         if (-not (Test-ExtractedDir 'vmaps')) {
@@ -147,8 +200,10 @@ if ($doMmaps) {
         $threads = if ($MmapThreads -gt 0) { $MmapThreads } else { Get-ThreadCount -Settings $settings }
         Write-Info "usando $threads threads - a maquina vai ficar pesada"
         Write-Info "NAO feche a janela; termina quando aparecer 'Press any key'"
+        if ($mapCount -gt 0) { Write-Info "$mapCount mapas a processar" }
         if (-not $exeMmapsGenerator) { Write-Fail "Gerador de mmaps nao encontrado em '$binDir'." "Rode 03-build.ps1." }
-        Invoke-Extractor -Exe $exeMmapsGenerator -Arguments @('--threads', "$threads") -Label 'geracao dos mmaps'
+        Invoke-Extractor -Exe $exeMmapsGenerator -Arguments @('--threads', "$threads") -Label 'Gerando mmaps' `
+                         -WatchDir (Join-Path $client 'mmaps') -WatchFilter '*.mmap' -ExpectedTotal $mapCount
     }
 }
 
