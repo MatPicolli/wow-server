@@ -131,9 +131,22 @@ public sealed class SettingsService
     {
         EnsureExists();
         var text = File.ReadAllText(SettingsPath);
-        text = ApplyTo(text, s);
+        var novo = ApplyTo(text, s);
+
+        // Um settings.psd1 ilegivel derruba TODOS os scripts, nao so a GUI.
+        // Se a edicao gerou chave repetida, e bug aqui - melhor recusar a
+        // gravacao e dizer isso do que deixar o usuario com tudo quebrado.
+        var duplicadas = Psd1Editor.FindDuplicateKeys(novo);
+        if (duplicadas.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "A edicao geraria chave(s) repetida(s) em settings.psd1: "
+                + string.Join(", ", duplicadas)
+                + ". O arquivo NAO foi alterado.");
+        }
+
         // sem BOM: o Import-PowerShellDataFile engasga com BOM em algumas versoes
-        File.WriteAllText(SettingsPath, text, new System.Text.UTF8Encoding(false));
+        File.WriteAllText(SettingsPath, novo, new System.Text.UTF8Encoding(false));
     }
 
     /// <summary>Funcao pura, para poder ser testada isoladamente.</summary>

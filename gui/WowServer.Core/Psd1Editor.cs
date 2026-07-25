@@ -22,10 +22,17 @@ public static class Psd1Editor
     /// Sem isso, reescrever a linha inteira apagaria tanto o alinhamento
     /// quanto os comentarios - e o settings.psd1 e feito para ser lido.
     /// </summary>
+    /// O fim da linha usa lookahead (?=\r?\n|$) em vez de ancora $.
+    ///
+    /// Em modo multiline o $ do .NET casa imediatamente antes do \n - o que
+    /// deixa o \r do CRLF no caminho. Como nenhum grupo consome \r, o padrao
+    /// simplesmente nao casava em arquivos gravados no Windows, toda chave era
+    /// tratada como inexistente e acabava duplicada no fim do arquivo. O
+    /// lookahead aceita as duas convencoes sem consumir nada.
     private static string LinePattern(string key) =>
         @"(?m)^(?<lead>[ \t]*" + Regex.Escape(key) + @"[ \t]*=[ \t]*)"
         + @"(?<val>'(?:[^']|'')*'|""(?:[^""]|"""")*""|[^\s#]*)"
-        + @"(?<tail>[ \t]*(?:#[^\r\n]*)?)$";
+        + @"(?<tail>[ \t]*(?:#[^\r\n]*)?)(?=\r?\n|$)";
 
     /// <summary>Troca uma chave de primeiro nivel: Chave = valor</summary>
     public static string SetScalar(string text, string key, string rawValue)
@@ -99,6 +106,51 @@ public static class Psd1Editor
         var last = text.LastIndexOf('}');
         if (last < 0) return text + Environment.NewLine + line + Environment.NewLine;
         return text.Insert(last, line + Environment.NewLine);
+    }
+
+    /// <summary>
+    /// Chaves declaradas mais de uma vez no mesmo nivel.
+    ///
+    /// Import-PowerShellDataFile recusa hashtable com chave repetida, e o
+    /// arquivo inteiro deixa de ser legivel. Como a duplicacao so aparece
+    /// depois de gravar, verificamos antes de escrever.
+    /// </summary>
+    public static IReadOnlyList<string> FindDuplicateKeys(string text)
+    {
+        var porNivel = new Dictionary<int, Dictionary<string, int>>();
+        var duplicadas = new List<string>();
+        var nivel = 0;
+
+        foreach (var bruta in text.Split('\n'))
+        {
+            var linha = bruta.TrimEnd('\r');
+
+            var semComentario = linha.TrimStart().StartsWith("#", StringComparison.Ordinal)
+                ? string.Empty
+                : linha;
+
+            var m = Regex.Match(semComentario, @"^[ \t]*(?<k>[A-Za-z_]\w*)[ \t]*=");
+            if (m.Success)
+            {
+                var contagem = porNivel.TryGetValue(nivel, out var mapa)
+                    ? mapa
+                    : porNivel[nivel] = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+                var chave = m.Groups["k"].Value;
+                contagem[chave] = contagem.GetValueOrDefault(chave) + 1;
+                if (contagem[chave] == 2) duplicadas.Add(chave);
+            }
+
+            // profundidade depois de contar a chave: 'MySql = @{' declara
+            // MySql no nivel de fora e so entao abre um nivel novo
+            foreach (var c in semComentario)
+            {
+                if (c == '{') nivel++;
+                else if (c == '}') nivel--;
+            }
+        }
+
+        return duplicadas;
     }
 
     /// <summary>Envolve em aspas simples, escapando as que existirem no valor.</summary>

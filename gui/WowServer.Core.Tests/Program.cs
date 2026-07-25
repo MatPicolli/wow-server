@@ -22,9 +22,10 @@ void Check(string nome, bool condicao, string? detalhe = null)
 }
 
 // ---------------------------------------------------------------- psd1 -----
-Console.WriteLine("\n=== Psd1Editor: edicao preservando comentarios ===");
-
-const string exemplo = """
+// Rodado com LF e com CRLF: o bug que corrompeu um settings.psd1 real so
+// aparecia com fim de linha do Windows, e passou batido porque os literais
+// deste arquivo usam LF.
+const string exemploBase = """
 @{
     # Pastas do servidor
     Root      = 'C:\AzerothCore'
@@ -42,6 +43,14 @@ const string exemplo = """
     ExtractMmaps = $true
 }
 """;
+
+foreach (var (convencao, quebra) in new[] { ("LF", "\n"), ("CRLF", "\r\n") })
+{
+Console.WriteLine($"\n=== Psd1Editor com {convencao} ===");
+
+string N(string t) => t.Replace("\r\n", "\n").Replace("\n", quebra);
+
+var exemplo = N(exemploBase);
 
 var r1 = Psd1Editor.SetScalar(exemplo, "ClientDir", Psd1Editor.Quote(@"D:\WoW-3.3.5a"));
 Check("troca chave de primeiro nivel", r1.Contains(@"ClientDir = 'D:\WoW-3.3.5a'"));
@@ -61,7 +70,7 @@ Check("preserva comentario no fim da linha",
 
 // O teste que importa para SetNested: uma chave de mesmo nome existindo
 // dentro e fora do bloco. So a de dentro pode mudar.
-const string duplicada = """
+const string duplicadaBase = """
 @{
     Host = 'valor-de-fora'
     MySql = @{
@@ -69,6 +78,7 @@ const string duplicada = """
     }
 }
 """;
+var duplicada = N(duplicadaBase);
 var r3 = Psd1Editor.SetNested(duplicada, "MySql", "Host", Psd1Editor.Quote("trocado"));
 Check("SetNested nao vaza para fora do bloco",
       r3.Contains("Host = 'valor-de-fora'") && r3.Contains("Host = 'trocado'")
@@ -88,6 +98,18 @@ Check("escapa aspas simples no valor",
 
 var comAcento = Psd1Editor.SetScalar(exemplo, "RealmName", Psd1Editor.Quote("Servidor do Mateus Picollí"));
 Check("preserva acentuacao", comAcento.Contains("Picollí"));
+
+Check($"[{convencao}] nao duplica chave ao editar",
+      Psd1Editor.FindDuplicateKeys(r1).Count == 0,
+      string.Join(",", Psd1Editor.FindDuplicateKeys(r1)));
+
+var todas = SettingsService.ApplyTo(exemplo, new ServerSettings { ClientDir = @"D:\WoW" });
+Check($"[{convencao}] ApplyTo completo nao duplica nada",
+      Psd1Editor.FindDuplicateKeys(todas).Count == 0,
+      string.Join(",", Psd1Editor.FindDuplicateKeys(todas)));
+Check($"[{convencao}] ApplyTo preserva o valor gravado",
+      todas.Contains(@"ClientDir = 'D:\WoW'"));
+}
 
 // ------------------------------------------------------- settings json -----
 Console.WriteLine("\n=== SettingsService: leitura do JSON vindo do PowerShell ===");
@@ -115,7 +137,7 @@ Check("usa padrao quando a chave nao existe",
       faltando.MySql.User == "acore" && faltando.BuildConfig == "RelWithDebInfo");
 
 // ida e volta
-var editado = SettingsService.ApplyTo(exemplo, s);
+var editado = SettingsService.ApplyTo(exemploBase, s);
 Check("ida e volta grava o client", editado.Contains(@"ClientDir = 'D:\WoW-3.3.5a'"));
 Check("ida e volta grava a senha do banco", editado.Contains("Password = 'senha'"));
 Check("ida e volta preserva comentarios", editado.Contains("# Banco de dados"));
