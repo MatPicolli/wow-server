@@ -48,6 +48,24 @@
                 </DockPanel>
             </Border>
 
+            <!-- Faixa de progresso: some quando nao ha nada em andamento -->
+            <Border x:Name="FaixaProgresso" DockPanel.Dock="Top" Visibility="Collapsed"
+                    Background="{StaticResource BgPanel}"
+                    BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="10,7">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,5">
+                        <TextBlock x:Name="RotuloProgresso" Text="" FontSize="11"
+                                   Foreground="{StaticResource Text}" />
+                        <TextBlock x:Name="DetalheProgresso" DockPanel.Dock="Right"
+                                   HorizontalAlignment="Right" FontSize="11"
+                                   Foreground="{StaticResource TextDim}" />
+                    </DockPanel>
+                    <ProgressBar x:Name="Barra" Height="5" Minimum="0" Maximum="100"
+                                 Background="{StaticResource BgConsole}"
+                                 Foreground="{StaticResource Accent}" BorderThickness="0" />
+                </StackPanel>
+            </Border>
+
             <!-- HorizontalScrollBarVisibility=Disabled nao e so estetica: e ela
                  que faz o item ser limitado a largura do viewport, sem isso o
                  TextWrapping do TextBlock nao teria contra o que quebrar. -->

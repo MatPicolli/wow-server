@@ -322,7 +322,71 @@ public partial class ModulesView : UserControl
     private async void Rebuild_Click(object sender, RoutedEventArgs e)
     {
         Saida.Append("==> recompilando com os módulos instalados");
-        await _runner.RunAsync("rebuild.ps1");
+        await RecompilarAsync();
+    }
+
+    /// <summary>
+    /// Roda o rebuild acompanhando o progresso. O MSBuild nao reporta
+    /// andamento, entao contamos os arquivos que ele ecoa contra uma
+    /// estimativa do total de fontes.
+    /// </summary>
+    private async Task RecompilarAsync()
+    {
+        var progresso = new BuildProgressTracker();
+        var inicio = DateTime.Now;
+
+        var cfg = Session.Current.Loaded;
+        if (cfg is not null)
+        {
+            progresso.EstimatedTotal = await Task.Run(
+                () => BuildProgressTracker.EstimateSourceCount(cfg.SourceDir));
+
+            if (progresso.EstimatedTotal > 0)
+                Saida.Append($"    ~{progresso.EstimatedTotal} arquivos a compilar");
+        }
+
+        void AoSair(OutputLine linha)
+        {
+            progresso.Feed(linha.Text);
+            Dispatcher.Invoke(() =>
+                Saida.ShowProgress("Compilando", progresso.Percent,
+                                   progresso.Describe(DateTime.Now - inicio)));
+        }
+
+        _runner.Output += AoSair;
+        try
+        {
+            var codigo = await _runner.RunAsync("rebuild.ps1");
+            var duracao = DateTime.Now - inicio;
+
+            Saida.HideProgress();
+
+            if (codigo == 0 && progresso.Errors == 0)
+            {
+                Saida.AppendBanner(
+                    $"COMPILAÇÃO CONCLUÍDA em {duracao:hh\\:mm\\:ss} — "
+                    + $"{progresso.CompiledFiles} arquivos, {progresso.FinishedProjects} projetos",
+                    sucesso: true);
+                Saida.Append("Use a aba Servidor para iniciar.");
+            }
+            else
+            {
+                Saida.AppendBanner(
+                    $"COMPILAÇÃO FALHOU após {duracao:hh\\:mm\\:ss} — {progresso.Errors} erro(s)",
+                    sucesso: false);
+                Saida.Append("Procure a PRIMEIRA linha com 'error' — as seguintes costumam ser consequência.");
+                Saida.Append("Use 'copiar' ou 'salvar...' aqui em cima para levar o log inteiro.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Saida.HideProgress();
+            Saida.AppendBanner($"COMPILAÇÃO INTERROMPIDA — {ex.Message}", sucesso: false);
+        }
+        finally
+        {
+            _runner.Output -= AoSair;
+        }
     }
 
     private async Task RodarGitAsync(string[] argumentos)

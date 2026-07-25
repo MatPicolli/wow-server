@@ -136,6 +136,47 @@ public partial class ConsolePane : UserControl
 
     public void SetAutoScroll(bool ligado) => _rolagemAutomatica = ligado;
 
+    /// <summary>
+    /// Mostra a faixa de progresso. Sem porcentagem (percent = null) a barra
+    /// vira indeterminada - util quando se sabe que algo esta rodando mas nao
+    /// quanto falta.
+    /// </summary>
+    public void ShowProgress(string rotulo, double? percent, string detalhe = "")
+    {
+        FaixaProgresso.Visibility = Visibility.Visible;
+        RotuloProgresso.Text = rotulo;
+        DetalheProgresso.Text = detalhe;
+
+        if (percent is null)
+        {
+            Barra.IsIndeterminate = true;
+        }
+        else
+        {
+            Barra.IsIndeterminate = false;
+            Barra.Value = Math.Clamp(percent.Value, 0, 100);
+        }
+    }
+
+    public void HideProgress() => FaixaProgresso.Visibility = Visibility.Collapsed;
+
+    /// <summary>Encerramento visivel de uma tarefa longa, com destaque de cor.</summary>
+    public void AppendBanner(string texto, bool sucesso)
+    {
+        var res = Application.Current.Resources;
+        var cor = (Brush)(sucesso ? res["Ok"] : res["Err"]);
+        var borda = new string('─', Math.Max(20, texto.Length + 4));
+
+        _linhas.Add(new ConsoleLine("", cor));
+        _linhas.Add(new ConsoleLine(borda, cor));
+        _linhas.Add(new ConsoleLine("  " + texto, cor));
+        _linhas.Add(new ConsoleLine(borda, cor));
+        _linhas.Add(new ConsoleLine("", cor));
+
+        while (_linhas.Count > MaxLinhas) _linhas.RemoveAt(0);
+        if (_rolagemAutomatica && _linhas.Count > 0) Linhas.ScrollIntoView(_linhas[^1]);
+    }
+
     /// <summary>Todo o conteudo do painel como texto puro.</summary>
     public string GetText() => string.Join(Environment.NewLine, _linhas.Select(l => l.Text));
 

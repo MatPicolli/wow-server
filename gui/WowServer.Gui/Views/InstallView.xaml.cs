@@ -102,6 +102,9 @@ public partial class InstallView : UserControl
         BtnParar.IsEnabled = true;
         _cancelamento = new CancellationTokenSource();
 
+        var inicioGeral = DateTime.Now;
+        var houveFalha = false;
+
         try
         {
             foreach (var passo in passos)
@@ -110,40 +113,87 @@ public partial class InstallView : UserControl
                 Marcar(item, "◐", "Accent");
                 Saida.Append($"==> {passo.Title}");
 
-                int codigo;
-                if (passo.RequiresAdmin)
+                var inicioEtapa = DateTime.Now;
+                var progresso = new BuildProgressTracker();
+
+                // Compilar e a etapa em que o MSBuild permite medir andamento;
+                // nas outras a barra fica indeterminada, so indicando atividade.
+                if (passo.Id == "build")
                 {
-                    codigo = await RodarElevadoAsync(passo);
-                }
-                else
-                {
-                    codigo = await _runner.RunAsync(
-                        passo.Script, passo.Arguments, _cancelamento.Token);
+                    var cfg = Session.Current.Loaded;
+                    if (cfg is not null)
+                        progresso.EstimatedTotal = await Task.Run(
+                            () => BuildProgressTracker.EstimateSourceCount(cfg.SourceDir));
                 }
 
-                if (codigo == 0)
+                void AoSair(OutputLine linha)
+                {
+                    progresso.Feed(linha.Text);
+                    Dispatcher.Invoke(() => Saida.ShowProgress(
+                        passo.Title, progresso.Percent,
+                        progresso.Describe(DateTime.Now - inicioEtapa)));
+                }
+
+                _runner.Output += AoSair;
+                Saida.ShowProgress(passo.Title, null, passo.Duration);
+
+                int codigo;
+                try
+                {
+                    if (passo.RequiresAdmin)
+                    {
+                        codigo = await RodarElevadoAsync(passo);
+                    }
+                    else
+                    {
+                        codigo = await _runner.RunAsync(
+                            passo.Script, passo.Arguments, _cancelamento.Token);
+                    }
+                }
+                finally
+                {
+                    _runner.Output -= AoSair;
+                    Saida.HideProgress();
+                }
+
+                if (codigo == 0 && progresso.Errors == 0)
                 {
                     Marcar(item, "●", "Ok");
+                    Saida.Append($"    concluído em {DateTime.Now - inicioEtapa:hh\\:mm\\:ss}");
                 }
                 else
                 {
                     Marcar(item, "✕", "Err");
-                    Saida.Append($"[erro] {passo.Title} terminou com código {codigo}", OutputKind.Error);
+                    houveFalha = true;
+                    Saida.AppendBanner(
+                        $"{passo.Title.ToUpperInvariant()} FALHOU"
+                        + (progresso.Errors > 0 ? $" — {progresso.Errors} erro(s)" : $" — código {codigo}"),
+                        sucesso: false);
+                    Saida.Append("Procure a PRIMEIRA linha com 'error' — as seguintes costumam ser consequência.");
                     break;   // nao adianta seguir: as etapas dependem umas das outras
                 }
 
                 if (_cancelamento.IsCancellationRequested) break;
             }
+
+            if (!houveFalha && !_cancelamento.IsCancellationRequested)
+            {
+                Saida.AppendBanner(
+                    $"TUDO PRONTO em {DateTime.Now - inicioGeral:hh\\:mm\\:ss}", sucesso: true);
+                Saida.Append("Próximo passo: aba Servidor, botão Iniciar.");
+            }
         }
         catch (Exception ex)
         {
-            Saida.Append($"[erro] {ex.Message}", OutputKind.Error);
+            Saida.HideProgress();
+            Saida.AppendBanner($"INTERROMPIDO — {ex.Message}", sucesso: false);
         }
         finally
         {
             _ocupado = false;
             BtnTudo.IsEnabled = true;
             BtnParar.IsEnabled = false;
+            Saida.HideProgress();
             _cancelamento?.Dispose();
             _cancelamento = null;
         }

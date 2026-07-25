@@ -301,5 +301,64 @@ finally
     try { File.Delete(estadoPath); } catch { }
 }
 
+// ---------------------------------------------------------- build progress -
+Console.WriteLine("\n=== BuildProgressTracker: linhas reais do MSBuild ===");
+
+var bt = new BuildProgressTracker();
+
+// linhas de arquivo entrando na compilacao
+foreach (var l in new[] { "  AuctionHouseBot.cpp", "  ABConfig.cpp", "  Message.cpp",
+                          "  ALE_SC.cpp", "  adt.cpp" })
+    bt.Feed(l);
+Check("conta arquivos compilados", bt.CompiledFiles == 5, bt.CompiledFiles.ToString());
+Check("guarda o ultimo arquivo", bt.LastFile == "adt.cpp", bt.LastFile);
+
+// linha de erro do log real - menciona .cpp mas NAO e progresso
+bt.Feed(@"C:\AzerothCore\source\modules\mod-playerbots\src\Ai\Base\Actions\BattleGroundJoinAction.cpp(241,17): error C2065: 'ARENA_TYPE_NONE': identificador não declarado [C:\AzerothCore\build\modules\modules.vcxproj]");
+Check("linha de erro nao conta como arquivo compilado", bt.CompiledFiles == 5, bt.CompiledFiles.ToString());
+Check("linha de erro conta como erro", bt.Errors == 1, bt.Errors.ToString());
+
+bt.Feed(@"C:\AzerothCore\source\modules\mod-eluna\src\LuaEngine\ALECompat.h(12,1): error C1083: Não é possível abrir arquivo incluir: 'lua.h': No such file or directory [C:\AzerothCore\build\modules\modules.vcxproj]");
+Check("erro C1083 tambem conta", bt.Errors == 2, bt.Errors.ToString());
+
+// projeto concluido
+bt.Feed(@"  zlib.vcxproj -> C:\AzerothCore\build\deps\zlib\RelWithDebInfo\zlib.lib");
+Check("conta projeto concluido", bt.FinishedProjects == 1);
+Check("guarda o nome do projeto", bt.LastProject == "zlib", bt.LastProject);
+
+// linhas que nao sao nem uma coisa nem outra
+var antes = (bt.CompiledFiles, bt.FinishedProjects, bt.Errors);
+foreach (var l in new[] { "-- Configuring done (2.7s)", "  |   +- mod-ah-bot", "",
+                          "  Please define _WIN32_WINNT or _WIN32_WINDOWS appropriately." })
+    bt.Feed(l);
+Check("ignora ruido do cmake e do msbuild",
+      (bt.CompiledFiles, bt.FinishedProjects, bt.Errors) == antes);
+
+// porcentagem e estimativa
+Check("sem total nao ha porcentagem", bt.Percent is null);
+bt.EstimatedTotal = 100;
+Check("com total ha porcentagem", Math.Abs(bt.Percent!.Value - 5) < 0.01, bt.Percent?.ToString());
+
+var cedo = new BuildProgressTracker { EstimatedTotal = 1000 };
+for (var i = 0; i < 5; i++) cedo.Feed($"  f{i}.cpp");
+Check("nao estima com poucos arquivos", cedo.Estimate(TimeSpan.FromSeconds(10)) is null);
+
+var maduro = new BuildProgressTracker { EstimatedTotal = 1000 };
+for (var i = 0; i < 100; i++) maduro.Feed($"  f{i}.cpp");
+var falta = maduro.Estimate(TimeSpan.FromSeconds(60));
+Check("estima quando ja tem amostra",
+      falta is not null && Math.Abs(falta.Value.TotalSeconds - 540) < 1,
+      falta?.ToString());
+
+Check("descricao menciona progresso e erros",
+      bt.Describe(TimeSpan.FromMinutes(2)).Contains("de ~100") && bt.Describe(TimeSpan.FromMinutes(2)).Contains("erro"),
+      bt.Describe(TimeSpan.FromMinutes(2)));
+
+bt.Reset();
+Check("reset zera tudo", bt is { CompiledFiles: 0, Errors: 0, FinishedProjects: 0 });
+
+Check("estimativa de fontes em pasta inexistente devolve 0",
+      BuildProgressTracker.EstimateSourceCount("/nao/existe") == 0);
+
 Console.WriteLine($"\n{total - falhas}/{total} testes passaram (final)");
 return falhas == 0 ? 0 : 1;
