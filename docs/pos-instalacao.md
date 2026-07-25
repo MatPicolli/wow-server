@@ -187,14 +187,32 @@ O modelo é: clonar dentro de `modules/` e recompilar.
 cd C:\AzerothCore\source\modules
 git clone https://github.com/azerothcore/mod-eluna.git
 
-cd C:\AzerothCore\wow-server
-.\scripts\03-build.ps1
-.\scripts\06-deploy.ps1
-.\scripts\start-server.ps1
+cd C:\Users\Mateus\Documents\Projetos\AI\wow-server
+.\scripts\rebuild.ps1 -Start
 ```
 
-Vários módulos trazem SQL próprio e um `.conf.dist` que precisa virar `.conf`
-em `server\configs\`. Leia o README de cada um.
+O `rebuild.ps1` lista os módulos instalados e encadeia build → deploy →
+configure. É o ciclo que você repete a cada módulo adicionado, atualizado ou
+removido.
+
+**O SQL dos módulos é aplicado sozinho.** Muitos READMEs ainda mandam importar
+na mão — isso é instrução antiga. O auto-updater do worldserver detecta e
+aplica o SQL do módulo no primeiro start depois de instalado. A janela vai
+cuspir linhas de update; é normal.
+
+Os `.conf.dist` dos módulos também são tratados: o `06-deploy.ps1` copia e o
+`07-configure.ps1` gera os `.conf` correspondentes em
+`server\configs\modules\`. Os valores padrão funcionam; revise conforme o
+README de cada módulo.
+
+Para atualizar todos os módulos de uma vez:
+
+```powershell
+Get-ChildItem C:\AzerothCore\source\modules -Directory | ForEach-Object {
+    git -C $_.FullName pull
+}
+.\scripts\rebuild.ps1
+```
 
 ## Bots e casa de leilões
 
@@ -211,9 +229,7 @@ cd C:\AzerothCore\source\modules
 git clone https://github.com/azerothcore/mod-ah-bot.git
 
 cd C:\Users\Mateus\Documents\Projetos\AI\wow-server
-.\scripts\03-build.ps1
-.\scripts\06-deploy.ps1
-.\scripts\07-configure.ps1
+.\scripts\rebuild.ps1
 ```
 
 Ele precisa de uma **conta e um personagem dedicados** — é essa identidade que
@@ -260,10 +276,7 @@ cd C:\AzerothCore\source\modules
 git clone https://github.com/mod-playerbots/mod-playerbots.git
 
 cd C:\Users\Mateus\Documents\Projetos\AI\wow-server
-.\scripts\03-build.ps1
-.\scripts\06-deploy.ps1
-.\scripts\07-configure.ps1
-.\scripts\start-server.ps1
+.\scripts\rebuild.ps1 -Clean -Start
 ```
 
 O `-Force` é obrigatório ao trocar de repositório: sem ele o script se recusa
