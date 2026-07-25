@@ -345,6 +345,31 @@ public static class FieldHelp
                 new HelpExample("Rate.MoveSpeed", "dá para procurar pela chave direto"),
             }),
 
+        new FieldHelpEntry("item.nome", "Nome do item",
+            "Procura por parte do nome, sem diferenciar maiúsculas. Deixe vazio para "
+            + "trazer tudo que passar pelos outros filtros.",
+            new[]
+            {
+                new HelpExample("thunder", "acha a Thunderfury e qualquer outro com 'thunder'"),
+                new HelpExample("poção", "acentos contam: procure como está escrito no jogo"),
+                new HelpExample("(deixe vazio)",
+                    "combinado com uma categoria, lista a categoria inteira"),
+            })
+        {
+            Warning = "A busca é limitada a 500 itens por vez. Se aparecer o aviso de "
+                    + "limite, use os filtros para estreitar.",
+        },
+
+        new FieldHelpEntry("item.nivel", "Nível do item",
+            "Faixa de nível do ITEM (a força dele), que não é o nível necessário para "
+            + "usar. Um item de nível 213 é de raide do fim do WotLK.",
+            new[]
+            {
+                new HelpExample("1 a 60", "equipamento de Vanilla"),
+                new HelpExample("187 a 232", "as raides finais do WotLK"),
+                new HelpExample("(deixe vazio)", "sem limite de nível"),
+            }),
+
         // ----------------------------------------------------------- console
         new FieldHelpEntry("console.comando", "Comando para o servidor",
             "Vai direto para o console do worldserver. Aqui NÃO se usa o ponto na "

@@ -582,6 +582,118 @@ foreach (var e in FieldHelp.All)
                            && !string.IsNullOrWhiteSpace(x.Meaning)));
 }
 
+// ---- busca de itens -------------------------------------------------------
+var sqlVazio = ItemBrowser.BuildQuery(new ItemFilter(), "acore_world");
+Check("consulta sem filtro nao tem WHERE", !sqlVazio.Contains("WHERE"), sqlVazio);
+Check("consulta usa o banco informado", sqlVazio.Contains("`acore_world`.item_template"));
+Check("consulta tem limite", sqlVazio.Contains("LIMIT 200"));
+
+var sqlFiltrado = ItemBrowser.BuildQuery(
+    new ItemFilter { Name = "espada", Class = 2, Quality = 4, MinLevel = 60, MaxLevel = 80, Limit = 50 },
+    "acore_world");
+Check("filtra por nome", sqlFiltrado.Contains("name LIKE '%espada%'"), sqlFiltrado);
+Check("filtra por classe", sqlFiltrado.Contains("class = 2"));
+Check("filtra por qualidade", sqlFiltrado.Contains("Quality = 4"));
+Check("filtra por faixa de nivel",
+      sqlFiltrado.Contains("ItemLevel >= 60") && sqlFiltrado.Contains("ItemLevel <= 80"));
+Check("respeita o limite pedido", sqlFiltrado.Contains("LIMIT 50"));
+
+Check("limite tem teto",
+      ItemBrowser.BuildQuery(new ItemFilter { Limit = 99999 }, "w").Contains($"LIMIT {ItemBrowser.LimiteMaximo}"));
+Check("limite tem piso",
+      ItemBrowser.BuildQuery(new ItemFilter { Limit = 0 }, "w").Contains("LIMIT 1"));
+
+// Nome digitado vai para dentro de um LIKE. Sem escape, uma aspa fecharia a
+// string e o resto viraria comando.
+Check("escapa aspa simples", ItemBrowser.EscaparLike("O'Reilly") == "O''Reilly");
+Check("escapa contrabarra", ItemBrowser.EscaparLike(@"a\b") == @"a\\b");
+Check("escapa curinga %", ItemBrowser.EscaparLike("50%") == @"50\%");
+Check("escapa curinga _", ItemBrowser.EscaparLike("a_b") == @"a\_b");
+// A contrabarra tem que ser escapada ANTES: na ordem inversa, as que o proprio
+// escape insere seriam dobradas de novo.
+Check("ordem do escape nao dobra o que ele mesmo inseriu",
+      ItemBrowser.EscaparLike("100%") == @"100\%");
+Check("nome com aspa nao escapa da string",
+      ItemBrowser.BuildQuery(new ItemFilter { Name = "O'Reilly" }, "w")
+                 .Contains("name LIKE '%O''Reilly%'"));
+
+// leitura de uma linha real do cliente mysql
+var linha = string.Join("\t", new[]
+{
+    "12345", "Espada de Teste", "2", "7", "4", "13", "213", "80", "2", "0",
+    "150.5", "250.75", "2600", "105", "48500", "1",
+    "4", "35", "7", "42", "32", "18", "0", "0", "0", "0", "Uma espada de teste",
+});
+var item = ItemBrowser.ParseRow(linha);
+Check("le a linha do mysql", item is not null);
+Check("le entry e nome", item!.Entry == 12345 && item.Name == "Espada de Teste");
+Check("le dano decimal", Math.Abs(item.DmgMin - 150.5) < 0.01, item.DmgMin.ToString());
+Check("le tres atributos preenchidos", item.Stats.Count == 3, item.Stats.Count.ToString());
+Check("descarta atributos zerados", item.Stats.All(s => s.Value != 0));
+Check("le a descricao", item.Description == "Uma espada de teste");
+
+Check("cabecalho nao vira item", ItemBrowser.ParseRow("entry\tname\tclass") is null);
+Check("linha vazia nao vira item", ItemBrowser.ParseRow("") is null);
+Check("linha curta nao vira item", ItemBrowser.ParseRow("1\t2\t3") is null);
+
+Check("cor de epico", ItemBrowser.CorDaQualidade(4) == "#A335EE");
+Check("cor de heranca", ItemBrowser.CorDaQualidade(7) == "#00CCFF");
+Check("subclasse de arma", ItemBrowser.NomeDaSubclasse(2, 7) == "Espada (1 mão)");
+Check("subclasse de armadura", ItemBrowser.NomeDaSubclasse(4, 4) == "Placas");
+Check("classe sem subclasse nomeada", ItemBrowser.NomeDaSubclasse(0, 3) == "");
+
+Check("dinheiro em ouro/prata/cobre", ItemBrowser.FormatarDinheiro(48500) == "4o 85p");
+Check("dinheiro so em cobre", ItemBrowser.FormatarDinheiro(37) == "37c");
+Check("dinheiro zero fica vazio", ItemBrowser.FormatarDinheiro(0) == "");
+
+// balao
+var balao = ItemTooltip.Build(item);
+Check("balao comeca pelo nome", balao[0].Text == "Espada de Teste");
+Check("nome sai na cor da qualidade", balao[0].Color == "#A335EE");
+Check("balao mostra o vinculo", balao.Any(l => l.Text == "Vincula ao equipar"));
+// O numero exato depende de arredondar ou truncar, e isso nao da para
+// conferir sem o client na frente. O que se afirma aqui e que a faixa
+// aparece, com os dois extremos.
+Check("balao mostra a faixa de dano",
+      balao.Any(l => l.Text.Contains("de dano") && l.Text.Contains(" - ")),
+      string.Join(" | ", balao.Select(l => l.Text)));
+// dps = media do dano / (delay em segundos) = 200.625 / 2.6
+Check("balao calcula o dps", balao.Any(l => l.Text.Contains("77.2")),
+      string.Join(" | ", balao.Select(l => l.Text)));
+Check("balao mostra atributos por nome", balao.Any(l => l.Text == "+35 de Força"));
+Check("balao mostra nivel do item", balao.Any(l => l.Text == "Nível do item: 213"));
+Check("balao mostra o id", balao.Any(l => l.Text == "ID 12345"));
+
+// item simples nao inventa linhas
+var simples = ItemBrowser.ParseRow(string.Join("\t", new[]
+{
+    "999", "Pano de Linho", "7", "5", "1", "0", "1", "1", "0", "0",
+    "0", "0", "0", "0", "10", "20",
+    "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "",
+}))!;
+var balaoSimples = ItemTooltip.Build(simples);
+Check("item sem dano nao mostra dps", !balaoSimples.Any(l => l.Text.Contains("por segundo")));
+Check("item sem atributo nao lista atributos", simples.Stats.Count == 0);
+Check("item sem vinculo nao mostra vinculo", !balaoSimples.Any(l => l.Text.StartsWith("Vincula")));
+
+// cartas de correio
+Check("nenhum item, nenhuma carta", MailPlan.Build(Array.Empty<int>(), "Mateus").Count == 0);
+Check("12 itens cabem numa carta", MailPlan.Build(Enumerable.Range(1, 12).ToList(), "Mateus").Count == 1);
+Check("13 itens viram duas cartas", MailPlan.Build(Enumerable.Range(1, 13).ToList(), "Mateus").Count == 2);
+Check("25 itens viram tres cartas", MailPlan.Build(Enumerable.Range(1, 25).ToList(), "Mateus").Count == 3);
+
+var cartas = MailPlan.Build(Enumerable.Range(1, 13).ToList(), "Mateus");
+Check("carta comeca com send items", cartas[0].StartsWith("send items Mateus "));
+Check("carta numerada quando ha mais de uma", cartas[0].Contains("1/2") && cartas[1].Contains("2/2"));
+Check("primeira carta leva 12 ids", cartas[0].Split(' ').Count(p => int.TryParse(p, out _)) == 12);
+Check("segunda carta leva o resto", cartas[1].TrimEnd().EndsWith(" 13"));
+Check("carta unica nao e numerada",
+      !MailPlan.Build(new[] { 1 }, "Mateus")[0].Contains("1/1"));
+
+var addItens = MailPlan.BuildAddItem(new[] { 42943, 42944 });
+Check("additem sai um por item", addItens.Count == 2);
+Check("additem leva o ponto do chat", addItens[0] == ".additem 42943");
+
 // ---- ajustes do worldserver.conf ------------------------------------------
 Check("catalogo de ajustes nao esta vazio", ConfigTuning.All.Count > 0);
 Check("chaves de ajuste nao se repetem",

@@ -41,6 +41,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\remove-module.ps1 -Name mod-eluna   # preview, then -Apply
 .\scripts\reset-server.ps1           # wipe everything rebuildable, keep the extraction
 .\scripts\gm-heirlooms.ps1 -Character X     # mails every heirloom the DB has
+.\scripts\gm-items.ps1 -Query "SELECT ..."   # read-only; the GUI item browser calls it
 ```
 
 Numbered scripts `00`–`08` are the install pipeline and are individually
@@ -207,6 +208,12 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   the console has no character and no position. `send items` is `Console::Yes`,
   which is why the heirloom kit goes by mail: max 12 items per letter
   (`MAX_MAIL_ITEMS`).
+- Item icons are **not** available: they are BLP files inside the client's MPQ
+  archives, and the pipeline extracts only dbc/maps/vmaps/mmaps. Showing them
+  would need an MPQ reader plus a BLP decoder. The item list uses a
+  quality-coloured square instead.
+- Item tooltips are built from `item_template` alone. "Use: ..." effects are
+  deliberately missing — that text lives in `Spell.dbc`, not the database.
 - Heirlooms are `item_template.Quality = 7` (`ITEM_QUALITY_HEIRLOOM`). Query for
   them instead of hardcoding IDs — it picks up whatever modules added, and no
   invented item IDs can creep in.
