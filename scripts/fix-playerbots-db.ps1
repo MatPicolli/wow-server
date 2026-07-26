@@ -67,7 +67,8 @@ if ($jaFunciona) {
         $RootPassword = Read-MySqlRootPassword
     }
 
-        [void]$sql.AppendLine("CREATE DATABASE IF NOT EXISTS ``$db`` DEFAULT CHARACTER SET UTF8MB4 COLLATE utf8mb4_unicode_ci;")
+    $sql = New-Object Text.StringBuilder
+    [void]$sql.AppendLine("CREATE DATABASE IF NOT EXISTS ``$db`` DEFAULT CHARACTER SET UTF8MB4 COLLATE utf8mb4_unicode_ci;")
 
     # 'localhost' e '127.0.0.1' sao usuarios DIFERENTES para o MySQL. O erro do
     # worldserver cita 'acore'@'localhost', entao os dois precisam do acesso.
