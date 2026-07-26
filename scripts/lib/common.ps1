@@ -429,9 +429,9 @@ function Get-EmptySubmodulePath {
         so como pasta vazia.
 
         Um clone sem --recurse-submodules deixa exatamente esse estado: o modulo
-        parece instalado, mas o codigo da dependencia nao esta la. Foi assim que
-        o Eluna passou pela listagem e so falhou no meio da compilacao, com
-        "lua.h: No such file or directory".
+        parece instalado - a pasta esta la, com o .gitmodules dentro - mas o
+        codigo da dependencia nao veio, e a falta so aparece no meio da
+        compilacao, como um include que nao existe.
     #>
     param([string]$ModulePath)
 
@@ -457,6 +457,56 @@ function Get-EmptySubmodulePath {
     }
 
     return ,@($vazios)
+}
+
+function Get-RenamedModule {
+    <#
+        Modulos instalados com um nome de pasta que o core nao reconhece mais.
+
+        O caso real e o Eluna, que virou 'mod-ale' (Azeroth Lua Engine). O
+        modules/CMakeLists.txt do core so liga a biblioteca Lua ao alvo que
+        compila os modulos dentro de
+
+            if (SOURCE_MODULE MATCHES "mod-ale")
+                ...
+            if (MOD_ALE_FOUND)
+                target_link_libraries(modules PUBLIC lualib)
+
+        e SOURCE_MODULE e o NOME DA PASTA em modules/ (GetModuleSourceList faz
+        um glob do diretorio). Quem clona pelo endereco antigo - que o GitHub
+        redireciona, entao o codigo vem certo - fica com a pasta 'mod-eluna', a
+        condicao nunca casa e o lua.h nunca entra no include path.
+
+        O sintoma engana: o proprio CMakeLists.txt do modulo e adicionado por
+        nome nenhum (add_subdirectory de qualquer pasta com CMakeLists), entao
+        lua52.lib COMPILA, e so os arquivos do modulo falham - 25 erros C1083
+        identicos, todos 'lua.h'. Nao tem relacao com o Playerbots: o core
+        oficial e o fork trazem exatamente a mesma checagem.
+
+        Devolve objetos com Atual, Correto e Conflito (quando a pasta certa ja
+        existe do lado da errada - ai renomear nao serve, tem que remover).
+    #>
+    param([string]$ModulesDir)
+
+    # ',' no return: sem ela um array vazio vira $null e o .Count do chamador
+    # estoura sob StrictMode.
+    if (-not $ModulesDir -or -not (Test-Path $ModulesDir)) { return ,@() }
+
+    $mapa = @{ 'mod-eluna' = 'mod-ale' }
+
+    $achados = @()
+    foreach ($antigo in $mapa.Keys) {
+        $novo = $mapa[$antigo]
+        if (-not (Test-Path (Join-Path $ModulesDir $antigo))) { continue }
+
+        $achados += [pscustomobject]@{
+            Atual    = $antigo
+            Correto  = $novo
+            Conflito = [bool](Test-Path (Join-Path $ModulesDir $novo))
+        }
+    }
+
+    return ,@($achados)
 }
 
 function Invoke-ProcessWithProgress {

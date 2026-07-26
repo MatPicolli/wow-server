@@ -243,8 +243,8 @@ if ($instalados.Count -gt 0) {
         if (Test-Path $destino) { Write-Info "$($m.Nome) ja esta la"; continue }
 
         Write-Info "clonando $($m.Nome)"
-        # --recurse-submodules: sem isso o Eluna vem sem a engine Lua e a
-        # compilacao morre com "lua.h: No such file or directory".
+        # --recurse-submodules: sem isso um modulo que usa submodulo volta com a
+        # pasta da dependencia vazia, e a compilacao morre num include ausente.
         $anterior = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         git clone --recurse-submodules $m.Url $destino 2>&1 | ForEach-Object { Write-Info "  $_" }

@@ -186,11 +186,19 @@ O modelo é: clonar dentro de `modules/` e recompilar.
 
 ```powershell
 cd C:\AzerothCore\source\modules
-git clone https://github.com/azerothcore/mod-eluna.git
+git clone https://github.com/azerothcore/mod-ale.git
 
 cd C:\Users\Mateus\Documents\Projetos\AI\wow-server
 .\scripts\rebuild.ps1 -Start
 ```
+
+> **O nome da pasta importa.** O core procura alguns módulos pelo nome do
+> diretório em `modules/`. O caso que morde é o módulo Lua: ele se chama
+> `mod-ale` hoje, e o endereço antigo (`mod-eluna`) continua funcionando por
+> redirecionamento do GitHub — o código vem certo, a pasta sai com o nome
+> errado, e a compilação para com 25 erros `C1083: 'lua.h'` depois de já ter
+> gerado a biblioteca Lua com sucesso. O `rebuild.ps1` detecta isso antes de
+> compilar e diz o comando para renomear.
 
 O `rebuild.ps1` lista os módulos instalados e encadeia build → deploy →
 configure. É o ciclo que você repete a cada módulo adicionado, atualizado ou

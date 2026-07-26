@@ -354,19 +354,22 @@ public static class ModuleCatalog
         { Category = ExtrasCategoria },
 
         new CatalogModule(
-            "mod-eluna", "Eluna (scripts Lua)",
-            "https://github.com/azerothcore/mod-eluna",
+            "mod-ale", "ALE / Eluna (scripts Lua)",
+            "https://github.com/azerothcore/mod-ale",
             "Permite escrever lógica de jogo em Lua, com recarga a quente.",
             "Base de muita customização: eventos, comandos próprios, NPCs com "
             + "comportamento especial. Recarrega sem reiniciar o servidor "
-            + "(reload eluna).",
+            + "(reload eluna). É o antigo Eluna, renomeado para ALE "
+            + "(Azeroth Lua Engine).",
             ModuleStatus.Oficial,
             PostInstallNote:
-                "Não compila sobre o fork do Playerbots. A biblioteca Lua é gerada, "
-                + "mas o CMake do módulo nunca expõe o cabeçalho 'lua.h' ao alvo que "
-                + "compila os módulos, e a compilação para com 25 erros de include. "
-                + "Não é conflito de símbolos com os bots: é o CMake do próprio "
-                + "módulo, que espera um AzerothCore mais novo do que o fork usa.")
+                "A pasta em modules/ precisa se chamar exatamente 'mod-ale'. O "
+                + "CMake do core só liga a biblioteca Lua ao alvo dos módulos "
+                + "quando encontra esse nome; clonado como 'mod-eluna' (o endereço "
+                + "antigo, que o GitHub ainda redireciona) a lib Lua compila mas "
+                + "'lua.h' nunca entra no include path, e a compilação para com "
+                + "25 erros C1083 iguais. Vale para o core oficial e para o fork "
+                + "do Playerbots — a checagem é a mesma nos dois.")
         { Category = ExtrasCategoria },
     };
 

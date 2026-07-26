@@ -279,13 +279,22 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 - Some modules pull dependencies as git submodules — clone with
   `--recurse-submodules`. `Get-EmptySubmodulePath` catches an empty one up front;
   `rebuild.ps1` calls it.
-- **`mod-eluna` is not one of them** — it has no `.gitmodules`, it vendors Lua
-  directly. Its `lua.h: No such file or directory` is a different failure and
-  `submodule update` does not fix it: the module's root `CMakeLists.txt` only
-  does `add_subdirectory(src/lualib/lua)` and never puts the Lua headers on the
-  include path of the aggregate `modules` target. `lua52.lib` builds fine right
-  before the 25 include errors — that pair of facts is how to tell this apart
-  from a genuine missing submodule.
+- **The Lua module's folder must be named `mod-ale`.** Eluna was renamed to ALE
+  (Azeroth Lua Engine); `azerothcore/mod-eluna` still redirects, so cloning the
+  old address gives the right code in a folder with the *wrong name*. The core's
+  `modules/CMakeLists.txt` only links Lua into the aggregate target inside
+  `if (SOURCE_MODULE MATCHES "mod-ale")` → `MOD_ALE_FOUND` →
+  `target_link_libraries(modules PUBLIC lualib)`, and `SOURCE_MODULE` is the
+  **directory name** (`GetModuleSourceList` globs `modules/`). Named
+  `mod-eluna`, that branch never runs and `lua.h` is never on the include path.
+  The give-away is that `lua52.lib` builds fine right before 25 identical
+  `C1083 lua.h` errors — the module's own `CMakeLists.txt` is added by
+  `add_subdirectory` regardless of name (root `CMakeLists.txt`, line ~72), so
+  the library compiles and only the module's sources fail. It has no
+  `.gitmodules`, so `submodule update` does nothing. This is **not**
+  Playerbots-specific: master and the fork carry the identical check.
+  `Get-RenamedModule` detects the stale folder and `rebuild.ps1` refuses to
+  build until it is renamed (`-Force` overrides).
 - Playerbots and NPCBots are **not modules**: each requires replacing the core
   with a fork. Installing them over the stock core produces dozens of `C2660`
   errors. Switching forks deletes the source tree, and `modules/` lives inside

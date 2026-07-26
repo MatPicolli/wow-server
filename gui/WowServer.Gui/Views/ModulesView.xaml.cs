@@ -697,9 +697,9 @@ public partial class ModulesView : UserControl
         }
 
         Saida.Append($"==> clonando {modulo.Name}");
-        // --recurse-submodules: modulos como o Eluna trazem a engine Lua
-        // como submodulo, e sem ele a compilacao falha com "lua.h: No such
-        // file or directory".
+        // --recurse-submodules: alguns modulos trazem dependencias como
+        // submodulo, e sem ele a pasta do modulo parece completa enquanto a
+        // dependencia fica vazia - a compilacao so morre meia hora depois.
         await RodarGitAsync(new[] { "clone", "--recurse-submodules", modulo.Repository, destino });
     }
 

@@ -63,9 +63,9 @@ if (-not $modulos) {
         if (Test-Path (Join-Path $mod.FullName '.git')) {
             try { $rev = (git -C $mod.FullName rev-parse --short HEAD 2>$null | Out-String).Trim() } catch { }
 
-            # Alguns modulos trazem dependencias como submodulo - o Eluna traz
-            # a engine Lua assim. Sem inicializar, a compilacao morre com
-            # "lua.h: No such file or directory".
+            # Alguns modulos trazem dependencias como submodulo. Sem
+            # inicializar, a pasta da dependencia fica vazia e a compilacao
+            # morre num include que nao existe.
             $gitmodules = Join-Path $mod.FullName '.gitmodules'
             if (Test-Path $gitmodules) {
                 Write-Info "$($mod.Name): sincronizando submodulos"
@@ -104,6 +104,27 @@ if (-not $modulos) {
             }
         }
         Write-Ok ("{0,-32} {1}" -f $mod.Name, $rev)
+    }
+}
+
+# --- pasta com o nome que o core nao reconhece mais -------------------------
+# Custou uma compilacao inteira: com a pasta chamada 'mod-eluna' o core nunca
+# entra no ramo que poe o lua.h no include path, a lib Lua compila, e so os
+# arquivos do modulo falham - 25 erros C1083 iguais, 20 minutos depois.
+foreach ($ren in (Get-RenamedModule $modulesDir)) {
+    if ($ren.Conflito) {
+        $msg = "modules\$($ren.Atual) e modules\$($ren.Correto) existem os dois - o mesmo codigo entraria duas vezes na compilacao"
+        $comoResolver = ".\scripts\remove-module.ps1 -Name $($ren.Atual) -Apply"
+    } else {
+        $msg = "modules\$($ren.Atual) precisa se chamar '$($ren.Correto)': e por esse nome que o core liga a biblioteca Lua ao alvo dos modulos"
+        $comoResolver = "Rename-Item `"$(Join-Path $modulesDir $ren.Atual)`" '$($ren.Correto)'"
+    }
+
+    if ($Force) {
+        Write-Warn $msg
+        Write-Warn '-Force: seguindo mesmo assim, a compilacao provavelmente vai falhar'
+    } else {
+        Write-Fail $msg "rode: $comoResolver  (ou de novo com -Force)"
     }
 }
 

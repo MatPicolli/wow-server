@@ -175,6 +175,13 @@ Check("modulo de fork traz repositorio e branch",
 Check("todo modulo tem repositorio",
       ModuleCatalog.All.All(m => m.Repository.StartsWith("https://", StringComparison.Ordinal)));
 
+// O nome do modulo Lua e o bug em pessoa: o CMake do core so liga a lib Lua ao
+// alvo dos modulos dentro de 'if (SOURCE_MODULE MATCHES "mod-ale")', e
+// SOURCE_MODULE e o nome da PASTA. Oferecer o endereco antigo faz a pasta sair
+// como 'mod-eluna' e a compilacao para em 25 erros C1083 identicos.
+Check("modulo Lua se chama mod-ale", ModuleCatalog.Find("mod-ale") is not null);
+Check("catalogo nao oferece mais o nome antigo", ModuleCatalog.Find("mod-eluna") is null);
+
 Check("plano tem 8 etapas", InstallPlan.Steps.Count == 8, InstallPlan.Steps.Count.ToString());
 Check("ids sao unicos",
       InstallPlan.Steps.Select(x => x.Id).Distinct().Count() == InstallPlan.Steps.Count);
