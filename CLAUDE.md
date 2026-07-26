@@ -21,6 +21,33 @@ commit messages are in English, except in the PowerShell scripts where comments
 are Portuguese without accents (they are read in consoles with varying code
 pages).
 
+### The live install is not in this repository
+
+The user's actual server lives at `D:\AzerothCore` and has been customised well
+beyond what these scripts do — Lua scripts, a prestige system, a hand-built
+48-piece heirloom set, `.bat` helpers, custom SQL. Another agent worked directly
+in that folder and wrote up what it changed;
+[`docs/servidor-instalado.md`](docs/servidor-instalado.md) is that write-up,
+unedited. **None of those files are here** — they exist only on that machine,
+so nothing in this repository can rebuild them.
+
+Four things from it change how code gets written *here*:
+
+- **The world database is on an older schema than `source/data/sql/base/`.**
+  `creature` has `id`, not `id1/id2/id3`, and `creature_template` has lost
+  `scale`, `trainer_*`, `mechanic_immune_mask` and
+  `spell_school_immune_mask`. Anything generating SQL against those tables must
+  be checked against a dump of the live database, never against the core's
+  source tree — the mismatch surfaces as `ERROR 1054 Unknown column`.
+- **`mysqldump` on MySQL 8 needs `--no-tablespaces`** when it runs as the
+  server's own user, which has no `PROCESS` privilege. `backup-db.ps1` passes it.
+- **`mod-ale` is confirmed on the live install**, which is the naming fix
+  documented under AzerothCore gotchas below.
+- Building from Visual Studio by hand means Configure + Generate and then the
+  **INSTALL** target, not `worldserver` — otherwise a newly added module
+  silently isn't there. Our pipeline doesn't have this problem: `06-deploy.ps1`
+  copies the binaries and every `.conf.dist`, module configs included.
+
 ## Commands
 
 Everything below runs from the repository root unless noted.

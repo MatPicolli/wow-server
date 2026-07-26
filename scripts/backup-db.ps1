@@ -71,6 +71,13 @@ $dumpArgs = @(
     '--single-transaction'      # retrato consistente sem travar o servidor
     '--routines'
     '--events'
+    # Sem isso o mysqldump consulta INFORMATION_SCHEMA.FILES, que no MySQL 8
+    # exige o privilegio PROCESS - e o usuario do servidor ('acore') so tem
+    # privilegio nos bancos dele. O backup morre com "Access denied; you need
+    # (at least one of) the PROCESS privilege(s)", que nao parece falar de
+    # backup nenhum. O AzerothCore nao usa tablespace proprio, entao nao ha o
+    # que perder na saida.
+    '--no-tablespaces'
     # --result-file faz o proprio mysqldump escrever o arquivo. Redirecionar
     # pelo PowerShell passaria por Set-Content/Out-File, que no Windows
     # PowerShell 5.1 gravam UTF-8 COM BOM - e um BOM no inicio quebra o

@@ -213,6 +213,7 @@ docs/
   passo-a-passo.md          instalação manual, sem os scripts
   pos-instalacao.md         GM, LAN/internet, mods, backup
   troubleshooting.md        erros comuns
+  servidor-instalado.md     o que existe no D:\AzerothCore de verdade
 ```
 
 Nada do servidor em si mora neste repo — o código do AzerothCore, os binários

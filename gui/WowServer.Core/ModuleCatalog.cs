@@ -211,6 +211,20 @@ public static class ModuleCatalog
             "Elimina a viagem à capital a cada dois níveis. Cada ida ao treinador "
             + "custa alguns minutos de voo; jogando pouco por sessão, isso vira a "
             + "maior parte do tempo.",
+            ModuleStatus.Oficial,
+            PostInstallNote:
+                "Briga com qualquer coisa que controle QUAIS magias você recebe — "
+                + "modos de progressão, sorteio de talentos, builds fechadas. Ele "
+                + "entrega tudo do seu nível automaticamente e passa por cima "
+                + "dessas regras sem avisar.")
+        { Category = ConvenienciaCategoria },
+
+        new CatalogModule(
+            "mod-aoe-loot", "Saque em Área",
+            "https://github.com/azerothcore/mod-aoe-loot",
+            "Saqueia todos os corpos por perto de uma vez só.",
+            "Um clique em vez de um por cadáver. A diferença aparece justamente "
+            + "onde se mata muita coisa junta — com bots no grupo, quase sempre.",
             ModuleStatus.Oficial)
         { Category = ConvenienciaCategoria },
 
