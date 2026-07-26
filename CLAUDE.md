@@ -277,10 +277,15 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 - Most modules have no root `CMakeLists.txt`; the core aggregates them. Don't
   use its presence to detect an installed module.
 - Some modules pull dependencies as git submodules — clone with
-  `--recurse-submodules`. A module cloned without it *looks* installed: the
-  directory is there, the submodule path is an empty folder, and the build dies
-  half an hour later with `lua.h: No such file or directory`.
-  `Get-EmptySubmodulePath` catches that up front; `rebuild.ps1` calls it.
+  `--recurse-submodules`. `Get-EmptySubmodulePath` catches an empty one up front;
+  `rebuild.ps1` calls it.
+- **`mod-eluna` is not one of them** — it has no `.gitmodules`, it vendors Lua
+  directly. Its `lua.h: No such file or directory` is a different failure and
+  `submodule update` does not fix it: the module's root `CMakeLists.txt` only
+  does `add_subdirectory(src/lualib/lua)` and never puts the Lua headers on the
+  include path of the aggregate `modules` target. `lua52.lib` builds fine right
+  before the 25 include errors — that pair of facts is how to tell this apart
+  from a genuine missing submodule.
 - Playerbots and NPCBots are **not modules**: each requires replacing the core
   with a fork. Installing them over the stock core produces dozens of `C2660`
   errors. Switching forks deletes the source tree, and `modules/` lives inside

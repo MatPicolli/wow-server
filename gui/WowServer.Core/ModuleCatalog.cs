@@ -362,9 +362,11 @@ public static class ModuleCatalog
             + "(reload eluna).",
             ModuleStatus.Oficial,
             PostInstallNote:
-                "O Eluna traz a engine Lua como submódulo do git. Se a compilação "
-                + "reclamar de 'lua.h', o submódulo não veio junto — o Recompilar "
-                + "avisa e mostra o comando que resolve.")
+                "Não compila sobre o fork do Playerbots. A biblioteca Lua é gerada, "
+                + "mas o CMake do módulo nunca expõe o cabeçalho 'lua.h' ao alvo que "
+                + "compila os módulos, e a compilação para com 25 erros de include. "
+                + "Não é conflito de símbolos com os bots: é o CMake do próprio "
+                + "módulo, que espera um AzerothCore mais novo do que o fork usa.")
         { Category = ExtrasCategoria },
     };
 
