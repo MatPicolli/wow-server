@@ -204,6 +204,12 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   when the user has no privilege on a schema that does not exist.
   `04-setup-database.ps1` now creates it always; `fix-playerbots-db.ps1` repairs
   an install that already exists.
+- **`playerbots.conf` carries its own connection string** and does not read the
+  password from `worldserver.conf`. Change the database password and the three
+  main pools keep working while only Playerbots fails — with the same "access
+  denied" message, so it looks like the grant is still wrong.
+  `fix-playerbots-db.ps1` rewrites `PlayerbotsDatabaseInfo` from
+  `settings.psd1`. Any module config holding credentials has this problem.
 - **Each core has its own `MMAP_VERSION`** (master is 20, the Playerbots fork
   is 19). The worldserver does not convert or refuse to start — it rejects each
   tile with "was built with generator vN, expected vM" and silently runs with no

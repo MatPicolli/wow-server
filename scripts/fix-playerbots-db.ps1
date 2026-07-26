@@ -82,6 +82,56 @@ Invoke-MySql -Settings $settings -User $m.RootUser -Password $RootPassword -Sql 
 Invoke-MySql -Settings $settings -User $m.User -Password $m.Password -Database $db -Sql 'SELECT 1;' | Out-Null
 Write-Ok "$db criado e acessivel por '$($m.User)'"
 
+# --- a linha de conexao do proprio modulo ------------------------------------
+# O playerbots.conf NAO le a senha do worldserver.conf: ele traz a propria
+# string de conexao, com o padrao de fabrica "acore;acore". Quem trocou a senha
+# do banco continua batendo em "access denied" mesmo com o banco ja criado e o
+# grant correto - os tres pools principais funcionam, so o do Playerbots nao.
+$confModulo = Join-Path (Join-Path (Join-Path $settings.ServerDir 'configs') 'modules') 'playerbots.conf'
+
+Write-Step 'Conferindo a linha de conexao do playerbots.conf'
+
+if (-not (Test-Path $confModulo)) {
+    Write-Warn "nao achei $confModulo"
+    Write-Info 'o modulo talvez ainda nao tenha sido implantado; rode .\scripts\rebuild.ps1'
+} else {
+    $esperado = "$($m.Host);$($m.Port);$($m.User);$($m.Password);$db"
+
+    $texto = [IO.File]::ReadAllText($confModulo)
+
+    # (?=\r?\n|$) e nao '$': em modo multiline o '$' casa antes do \n e deixa o
+    # \r do CRLF de fora, e este arquivo e CRLF.
+    $re = [regex]::new('(?m)^(?<lead>[ \t]*PlayerbotsDatabaseInfo[ \t]*=[ \t]*)(?<val>"[^"]*"|[^\r\n#]*?)(?<tail>[ \t]*(?:#[^\r\n]*)?)(?=\r?\n|$)')
+    $achado = $re.Match($texto)
+
+    if (-not $achado.Success) {
+        Write-Warn 'nao achei a chave PlayerbotsDatabaseInfo neste arquivo'
+        Write-Info "confira a mao: a linha deve ficar assim"
+        Write-Info "  PlayerbotsDatabaseInfo = `"$esperado`""
+    } else {
+        $atual = $achado.Groups['val'].Value.Trim('"')
+
+        if ($atual -eq $esperado) {
+            Write-Ok 'a linha de conexao ja esta correta'
+        } else {
+            Write-Info "atual:    $atual"
+            Write-Info "correto:  $esperado"
+
+            $novo = $re.Replace($texto, {
+                param($x)
+                $x.Groups['lead'].Value + '"' + $esperado + '"' + $x.Groups['tail'].Value
+            }, 1)
+
+            $copia = "$confModulo.bak-" + (Get-Date -Format 'yyyy-MM-dd_HHmm')
+            Copy-Item $confModulo $copia
+            Write-TextFileNoBom -Path $confModulo -Content $novo
+
+            Write-Ok 'linha de conexao corrigida'
+            Write-Info "copia do original: $copia"
+        }
+    }
+}
+
 Write-Step 'Proximo passo'
 Write-Info 'suba o servidor de novo: as tabelas do Playerbots sao criadas sozinhas'
 Write-Info 'no primeiro start, igual aos outros bancos.'
