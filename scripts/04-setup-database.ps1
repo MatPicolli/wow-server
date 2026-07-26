@@ -47,6 +47,15 @@ $user = $m.User
 $pass = $m.Password
 $dbs  = @($m.AuthDb, $m.WorldDb, $m.CharDb)
 
+# O fork do Playerbots usa um QUARTO banco, com o mesmo usuario. Ele nao e
+# criado por nenhum passo do AzerothCore, e sem ele o worldserver sobe, aplica
+# tudo, e so no fim diz "DatabasePool Playerbots NOT opened" - depois de dezenas
+# de linhas de log que escondem a causa.
+#
+# Criar sempre, mesmo sem o modulo instalado: um banco vazio a mais nao custa
+# nada, e evita a falha justamente para quem acabou de trocar o core.
+$dbs += $m.PlayerbotsDb
+
 $grantHosts = @('localhost', '127.0.0.1')
 
 $sql = New-Object Text.StringBuilder
@@ -74,6 +83,10 @@ foreach ($db in $dbs) {
     Invoke-MySql -Settings $settings -User $user -Password $pass -Database $db -Sql 'SELECT 1;' | Out-Null
     Write-Ok "$db acessivel"
 }
+
+Write-Info ''
+Write-Info "$($m.PlayerbotsDb) so e usado pelo fork do Playerbots;"
+Write-Info 'sem o modulo ele fica vazio e nao atrapalha nada.'
 
 Write-Host @"
 

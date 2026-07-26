@@ -57,6 +57,7 @@
         AuthDb   = 'acore_auth'
         WorldDb  = 'acore_world'
         CharDb   = 'acore_characters'
+        PlayerbotsDb = 'acore_playerbots'   # so o fork do Playerbots usa
     }
 
     # -------------------------------------------------------------------------

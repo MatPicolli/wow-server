@@ -42,6 +42,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\reset-server.ps1           # wipe everything rebuildable, keep the extraction
 .\scripts\gm-heirlooms.ps1 -Character X     # mails every heirloom the DB has
 .\scripts\gm-items.ps1 -Query "SELECT ..."   # read-only; the GUI item browser calls it
+.\scripts\fix-playerbots-db.ps1      # creates the 4th DB the Playerbots fork needs
 ```
 
 Numbered scripts `00`–`08` are the install pipeline and are individually
@@ -196,6 +197,13 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 
 **AzerothCore**
 
+- The Playerbots fork needs a **fourth database**, `acore_playerbots`
+  (`PlayerbotsDatabaseInfo` in playerbots.conf). No AzerothCore step creates it,
+  so switching cores on an existing install fails with *Access denied for user
+  'acore'@'localhost'* — MySQL says "access denied", not "unknown database",
+  when the user has no privilege on a schema that does not exist.
+  `04-setup-database.ps1` now creates it always; `fix-playerbots-db.ps1` repairs
+  an install that already exists.
 - **Each core has its own `MMAP_VERSION`** (master is 20, the Playerbots fork
   is 19). The worldserver does not convert or refuse to start — it rejects each
   tile with "was built with generator vN, expected vM" and silently runs with no

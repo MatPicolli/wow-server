@@ -76,6 +76,13 @@ function Import-ServerSettings {
         ExtractVmaps = $true
         ExtractMmaps = $true
     }
+    # O banco do Playerbots e opcional na configuracao: instalacoes feitas antes
+    # do fork existir nao tem essa chave, e sob StrictMode ler uma chave ausente
+    # LANCA em vez de devolver $null.
+    if (-not $s.MySql.ContainsKey('PlayerbotsDb')) {
+        $s.MySql['PlayerbotsDb'] = 'acore_playerbots'
+    }
+
     foreach ($k in $defaults.Keys) {
         if (-not $s.ContainsKey($k)) { $s[$k] = $defaults[$k] }
     }
@@ -280,7 +287,12 @@ function Invoke-MySql {
         [string]$File,
         [string]$User,
         [string]$Password,
-        [string]$Database
+        [string]$Database,
+
+        # Para sondagens em que a falha e esperada - "este usuario consegue
+        # entrar neste banco?". Sem isso, o erro do mysql aparece na tela como
+        # se fosse problema, quando e justamente o que se queria descobrir.
+        [switch]$Quiet
     )
 
     $exe = Get-MySqlExe
@@ -338,7 +350,7 @@ function Invoke-MySql {
     $text = $text.Trim()
 
     if ($code -ne 0) {
-        if ($text) {
+        if ($text -and -not $Quiet) {
             Write-Host ''
             Write-Host '    resposta do mysql.exe:' -ForegroundColor Yellow
             foreach ($line in ($text -split "`r?`n")) {
