@@ -24,6 +24,30 @@ public partial class ConsolePane : UserControl
     private bool _rolagemAutomatica = true;
 
     /// <summary>
+    /// Todos os painéis vivos, para o botão "limpar tudo".
+    ///
+    /// WeakReference de propósito: cada aba cria o seu, e uma lista comum
+    /// manteria vivo para sempre qualquer painel que a interface descartasse.
+    /// </summary>
+    private static readonly List<WeakReference<ConsolePane>> _todos = new();
+
+    /// <summary>Esvazia todos os painéis abertos, em qualquer aba.</summary>
+    public static void LimparTodos()
+    {
+        lock (_todos)
+        {
+            // A varredura aproveita para descartar as referências mortas.
+            _todos.RemoveAll(r => !r.TryGetTarget(out _));
+
+            foreach (var referencia in _todos)
+            {
+                if (referencia.TryGetTarget(out var painel))
+                    painel.Dispatcher.Invoke(painel.Clear);
+            }
+        }
+    }
+
+    /// <summary>
     /// Modo de quebra das linhas. DependencyProperty (e nao propriedade
     /// comum) porque o DataTemplate se liga a ela: assim alternar o
     /// checkbox reflete nas linhas ja exibidas, sem recriar a lista.
@@ -56,6 +80,8 @@ public partial class ConsolePane : UserControl
     {
         InitializeComponent();
         Linhas.ItemsSource = _linhas;
+
+        lock (_todos) _todos.Add(new WeakReference<ConsolePane>(this));
 
         // So agora todos os elementos existem, entao marcar o checkbox e
         // seguro - o handler vai encontrar a ListBox montada.
@@ -179,6 +205,12 @@ public partial class ConsolePane : UserControl
 
     /// <summary>Todo o conteudo do painel como texto puro.</summary>
     public string GetText() => string.Join(Environment.NewLine, _linhas.Select(l => l.Text));
+
+    private void LimparTudo_Click(object sender, RoutedEventArgs e)
+    {
+        LimparTodos();
+        Estado.Text = "consoles limpos";
+    }
 
     private void Copiar_Click(object sender, RoutedEventArgs e)
     {

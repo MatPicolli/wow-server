@@ -17,9 +17,12 @@
                         <Button Content="copiar" Click="Copiar_Click" Padding="8,2" Margin="0,0,6,0"
                                 FontSize="11" VerticalAlignment="Center"
                                 ToolTip="Copia todo o conteúdo deste painel para a área de transferência" />
-                        <Button Content="salvar..." Click="Salvar_Click" Padding="8,2" Margin="0,0,12,0"
+                        <Button Content="salvar..." Click="Salvar_Click" Padding="8,2" Margin="0,0,6,0"
                                 FontSize="11" VerticalAlignment="Center"
                                 ToolTip="Grava o conteúdo deste painel num arquivo de texto" />
+                        <Button Content="limpar tudo" Click="LimparTudo_Click" Padding="8,2" Margin="0,0,12,0"
+                                FontSize="11" VerticalAlignment="Center"
+                                ToolTip="Esvazia os consoles de todas as abas de uma vez" />
                         <!-- IsChecked NAO fica aqui de proposito: definir no XAML
                              dispara o evento Checked durante o
                              InitializeComponent, quando os elementos declarados

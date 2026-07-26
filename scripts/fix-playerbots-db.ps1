@@ -52,35 +52,38 @@ try {
     $jaFunciona = $true
 } catch { }
 
+# Sem 'exit' aqui: sao DOIS problemas independentes, e o segundo - a senha
+# errada dentro do playerbots.conf - continua existindo com o banco ja criado.
+# Sair cedo neste ponto foi exatamente o que fez a primeira versao dizer
+# "nada a corrigir" e deixar o servidor falhando igual.
 if ($jaFunciona) {
-    Write-Ok "'$($m.User)' ja acessa $db - nada a corrigir"
-    exit 0
+    Write-Ok "'$($m.User)' ja acessa $db"
+} else {
+    Write-Info "'$($m.User)' ainda nao acessa $db"
+
+    # ContainsKey e nao "-not $RootPassword": senha vazia e um valor legitimo, e
+    # com a checagem ingenua ela cairia no Read-Host mesmo tendo sido informada.
+    if (-not $PSBoundParameters.ContainsKey('RootPassword')) {
+        $RootPassword = Read-MySqlRootPassword
+    }
+
+        [void]$sql.AppendLine("CREATE DATABASE IF NOT EXISTS ``$db`` DEFAULT CHARACTER SET UTF8MB4 COLLATE utf8mb4_unicode_ci;")
+
+    # 'localhost' e '127.0.0.1' sao usuarios DIFERENTES para o MySQL. O erro do
+    # worldserver cita 'acore'@'localhost', entao os dois precisam do acesso.
+    foreach ($h in @('localhost', '127.0.0.1')) {
+        [void]$sql.AppendLine("CREATE USER IF NOT EXISTS '$($m.User)'@'$h' IDENTIFIED BY '$($m.Password)';")
+        [void]$sql.AppendLine("GRANT ALL PRIVILEGES ON ``$db``.* TO '$($m.User)'@'$h' WITH GRANT OPTION;")
+    }
+    [void]$sql.AppendLine('FLUSH PRIVILEGES;')
+
+    Write-Step 'Criando o banco e liberando o acesso'
+    Invoke-MySql -Settings $settings -User $m.RootUser -Password $RootPassword -Sql $sql.ToString() | Out-Null
+
+    # Conferir de verdade, com o usuario do servidor - que e quem vai conectar.
+    Invoke-MySql -Settings $settings -User $m.User -Password $m.Password -Database $db -Sql 'SELECT 1;' | Out-Null
+    Write-Ok "$db criado e acessivel por '$($m.User)'"
 }
-
-Write-Info "'$($m.User)' ainda nao acessa $db"
-# ContainsKey e nao "-not $RootPassword": senha vazia e um valor legitimo, e
-# com a checagem ingenua ela cairia no Read-Host mesmo tendo sido informada.
-if (-not $PSBoundParameters.ContainsKey('RootPassword')) {
-    $RootPassword = Read-MySqlRootPassword
-}
-
-$sql = New-Object Text.StringBuilder
-[void]$sql.AppendLine("CREATE DATABASE IF NOT EXISTS ``$db`` DEFAULT CHARACTER SET UTF8MB4 COLLATE utf8mb4_unicode_ci;")
-
-# 'localhost' e '127.0.0.1' sao usuarios DIFERENTES para o MySQL. O erro do
-# worldserver cita 'acore'@'localhost', entao os dois precisam do acesso.
-foreach ($h in @('localhost', '127.0.0.1')) {
-    [void]$sql.AppendLine("CREATE USER IF NOT EXISTS '$($m.User)'@'$h' IDENTIFIED BY '$($m.Password)';")
-    [void]$sql.AppendLine("GRANT ALL PRIVILEGES ON ``$db``.* TO '$($m.User)'@'$h' WITH GRANT OPTION;")
-}
-[void]$sql.AppendLine('FLUSH PRIVILEGES;')
-
-Write-Step 'Criando o banco e liberando o acesso'
-Invoke-MySql -Settings $settings -User $m.RootUser -Password $RootPassword -Sql $sql.ToString() | Out-Null
-
-# Conferir de verdade, com o usuario do servidor - que e quem vai conectar.
-Invoke-MySql -Settings $settings -User $m.User -Password $m.Password -Database $db -Sql 'SELECT 1;' | Out-Null
-Write-Ok "$db criado e acessivel por '$($m.User)'"
 
 # --- a linha de conexao do proprio modulo ------------------------------------
 # O playerbots.conf NAO le a senha do worldserver.conf: ele traz a propria
