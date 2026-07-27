@@ -779,6 +779,251 @@ finally
     try { Directory.Delete(dbcDir, true); } catch { }
 }
 
+// -------------------------------------------------- criar itens ----------
+Console.WriteLine("\n=== ItemBuilder: montar um item novo ===");
+
+// As colunas do item_template do AzerothCore que a tela usa. O teste passa uma
+// lista REDUZIDA de proposito, para provar que coluna ausente e descartada em
+// vez de entrar no comando.
+var colunasCompletas = new List<string>
+{
+    "entry", "name", "class", "subclass", "Quality", "displayid", "InventoryType",
+    "ItemLevel", "RequiredLevel", "bonding", "armor", "dmg_min1", "dmg_max1",
+    "dmg_type1", "delay", "MaxDurability", "SellPrice", "BuyPrice", "stackable",
+    "maxcount", "description", "AllowableClass", "AllowableRace", "Flags",
+    "ScalingStatDistribution",
+};
+for (var i = 1; i <= 10; i++) { colunasCompletas.Add($"stat_type{i}"); colunasCompletas.Add($"stat_value{i}"); }
+for (var i = 1; i <= 5; i++)
+{
+    colunasCompletas.Add($"spellid_{i}"); colunasCompletas.Add($"spelltrigger_{i}");
+    colunasCompletas.Add($"spellcharges_{i}"); colunasCompletas.Add($"spellcooldown_{i}");
+    colunasCompletas.Add($"spellcategory_{i}"); colunasCompletas.Add($"spellcategorycooldown_{i}");
+}
+
+var novoItem = new ItemDefinition
+{
+    Entry = 800000,
+    Name = "Elmo do Prestígio",
+    Class = 4,
+    Subclass = 1,
+    Quality = 7,
+    DisplayId = 31265,
+    InventoryType = 1,
+    ItemLevel = 80,
+    RequiredLevel = 1,
+    Bonding = 1,
+    Armor = 250,
+    MaxDurability = 60,
+    Stackable = 1,
+    Description = "Feito à mão.",
+    Stats = new[] { new ItemStat(4, 30), new ItemStat(7, 45) },
+    Spells = new[] { new ItemSpell(57353, 1) },
+};
+
+var semProblema = ItemBuilder.Validate(novoItem, new HashSet<int>(), new HashSet<int> { 800000 });
+Check("item bem preenchido nao acusa erro",
+      semProblema.All(p => p.Level != IssueLevel.Erro),
+      string.Join(" | ", semProblema.Select(p => p.Message)));
+
+var sqlItem = ItemBuilder.BuildSql(novoItem, colunasCompletas, out var forasDeUso);
+Check("nenhuma coluna descartada com a lista completa", forasDeUso.Count == 0,
+      string.Join(",", forasDeUso));
+
+// Idempotencia: e a regra da casa, e o caso comum e reaplicar depois de ajustar.
+Check("apaga antes de inserir", sqlItem.Contains("DELETE FROM `item_template` WHERE `entry` = 800000;"));
+Check("insere no item_template", sqlItem.Contains("INSERT INTO `item_template`"));
+Check("leva o nome", sqlItem.Contains("'Elmo do Prestígio'"));
+Check("leva o displayid", sqlItem.Contains("31265"));
+Check("leva o primeiro atributo", sqlItem.Contains("`stat_type1`") && sqlItem.Contains("`stat_value1`"));
+Check("leva o efeito", sqlItem.Contains("`spellid_1`") && sqlItem.Contains("57353"));
+Check("um comando por vez, terminado",
+      sqlItem.TrimEnd().EndsWith(";", StringComparison.Ordinal));
+
+// Banco em schema mais antigo: coluna que nao existe la nao pode entrar no
+// comando, senao o INSERT inteiro morre com Unknown column.
+var colunasAntigas = colunasCompletas.Where(c => c != "ScalingStatDistribution"
+                                              && c != "spellcategorycooldown_5").ToList();
+var sqlAntigo = ItemBuilder.BuildSql(
+    novoItem with { Extra = new Dictionary<string, string> { ["ScalingStatDistribution"] = "61" } },
+    colunasAntigas, out var descartadas);
+Check("coluna ausente no banco e descartada", descartadas.Contains("ScalingStatDistribution"));
+Check("e nao aparece no comando", !sqlAntigo.Contains("ScalingStatDistribution"));
+Check("as outras continuam", sqlAntigo.Contains("`stat_type1`"));
+
+// --- validacao ---
+Check("nome vazio e erro",
+      ItemBuilder.Validate(novoItem with { Name = "  " }).Any(p => p.Level == IssueLevel.Erro));
+Check("entry zero e erro",
+      ItemBuilder.Validate(novoItem with { Entry = 0 }).Any(p => p.Level == IssueLevel.Erro));
+Check("entry ja usado e erro",
+      ItemBuilder.Validate(novoItem, new HashSet<int> { 800000 })
+                 .Any(p => p.Level == IssueLevel.Erro && p.Message.Contains("800000")));
+Check("entry livre nao e erro",
+      !ItemBuilder.Validate(novoItem, new HashSet<int> { 800001 })
+                  .Any(p => p.Level == IssueLevel.Erro));
+Check("qualidade fora da faixa e erro",
+      ItemBuilder.Validate(novoItem with { Quality = 9 }).Any(p => p.Level == IssueLevel.Erro));
+Check("nivel acima de 255 e erro (tinyint unsigned)",
+      ItemBuilder.Validate(novoItem with { RequiredLevel = 300 }).Any(p => p.Level == IssueLevel.Erro));
+Check("dano maximo menor que o minimo e erro",
+      ItemBuilder.Validate(novoItem with { DmgMin = 50, DmgMax = 10 })
+                 .Any(p => p.Level == IssueLevel.Erro));
+Check("mais de 10 atributos e erro",
+      ItemBuilder.Validate(novoItem with { Stats = Enumerable.Range(1, 11).Select(i => new ItemStat(4, i)).ToList() })
+                 .Any(p => p.Level == IssueLevel.Erro));
+Check("mais de 5 efeitos e erro",
+      ItemBuilder.Validate(novoItem with { Spells = Enumerable.Range(1, 6).Select(i => new ItemSpell(i, 1)).ToList() })
+                 .Any(p => p.Level == IssueLevel.Erro));
+Check("gatilho inexistente e erro",
+      ItemBuilder.Validate(novoItem with { Spells = new[] { new ItemSpell(100, 99) } })
+                 .Any(p => p.Level == IssueLevel.Erro));
+Check("displayid alto vira aviso, nao erro",
+      ItemBuilder.Validate(novoItem with { DisplayId = 64190 })
+                 .Any(p => p.Level == IssueLevel.Aviso && p.Message.Contains("32000")));
+Check("entry fora do Item.dbc vira aviso",
+      ItemBuilder.Validate(novoItem, new HashSet<int>(), new HashSet<int> { 1, 2 })
+                 .Any(p => p.Level == IssueLevel.Aviso && p.Message.Contains("Item.dbc")));
+
+// --- escape: e por aqui que passaria uma injecao ---
+Check("aspa simples e dobrada", ItemBuilder.Escape("D'Alembert") == "D''Alembert");
+// A contrabarra tambem: por padrao o MySQL a trata como escape dentro de
+// string, entao um nome terminado em '\' engoliria a aspa de fechamento.
+Check("contrabarra e dobrada", ItemBuilder.Escape(@"a\b") == @"a\\b");
+Check("controle e removido", !ItemBuilder.Escape("a\nb\0c").Contains('\n'));
+
+var sqlMalicioso = ItemBuilder.BuildSql(
+    novoItem with { Name = "'); DROP TABLE item_template; --" }, colunasCompletas, out _);
+Check("nome com aspas nao emenda outro comando",
+      !sqlMalicioso.Contains("DROP TABLE item_template;")
+      || sqlMalicioso.Contains("''); DROP"),
+      sqlMalicioso);
+Check("continua tendo so DELETE e INSERT",
+      sqlMalicioso.Split(';', StringSplitOptions.RemoveEmptyEntries)
+                  .Count(t => t.Contains("DELETE") || t.Contains("INSERT")) == 2);
+
+// --- campo livre de "codar" ---
+Check("coluna com nome valido passa", ItemBuilder.ColunaValida("socketColor_1"));
+Check("coluna com espaco nao passa", !ItemBuilder.ColunaValida("socket color"));
+Check("coluna com ponto-e-virgula nao passa", !ItemBuilder.ColunaValida("a;b"));
+Check("coluna vazia nao passa", !ItemBuilder.ColunaValida(""));
+
+Check("numero e valor valido", ItemBuilder.ValorExtraValido("61"));
+Check("decimal e valor valido", ItemBuilder.ValorExtraValido("1.5"));
+Check("negativo e valor valido", ItemBuilder.ValorExtraValido("-1"));
+Check("texto entre aspas e valido", ItemBuilder.ValorExtraValido("'meu_script'"));
+Check("texto com aspa dentro nao e valido", ItemBuilder.ValorExtraValido("'a'b'") == false);
+Check("texto sem aspas nao e valido", !ItemBuilder.ValorExtraValido("meu_script"));
+Check("comando emendado nao e valido", !ItemBuilder.ValorExtraValido("1; DROP TABLE x"));
+Check("contrabarra nao e valida", !ItemBuilder.ValorExtraValido(@"'a\'"));
+
+Check("extra invalido vira erro",
+      ItemBuilder.Validate(novoItem with
+      {
+          Extra = new Dictionary<string, string> { ["ok"] = "1; DROP TABLE x" }
+      }).Any(p => p.Level == IssueLevel.Erro));
+
+var comExtra = ItemBuilder.BuildSql(
+    novoItem with { Extra = new Dictionary<string, string> { ["ScalingStatDistribution"] = "61" } },
+    colunasCompletas, out _);
+Check("extra valido entra no comando",
+      comExtra.Contains("`ScalingStatDistribution`") && comExtra.Contains("61"));
+
+// --- proximo id livre ---
+Check("primeiro id da faixa quando nada esta usado",
+      ItemBuilder.NextFreeEntry(Array.Empty<int>()) == 800000);
+Check("pula o que ja existe",
+      ItemBuilder.NextFreeEntry(new[] { 800000, 800001 }) == 800002);
+Check("nao se confunde com buraco",
+      ItemBuilder.NextFreeEntry(new[] { 800000, 800002 }) == 800001);
+
+// --- Spell.dbc ---
+Console.WriteLine("\n=== SpellDbc ===");
+
+var spellDir = Path.Combine(Path.GetTempPath(), "spell-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(Path.Combine(spellDir, "dbc"));
+try
+{
+    Check("sem arquivo devolve null", SpellDbc.Read(spellDir) is null);
+
+    // Monta um Spell.dbc no formato do 3.3.5a: 234 colunas, nome no campo 136.
+    static byte[] MontarSpellDbc(int campos, (int Id, string Nome)[] linhas)
+    {
+        var blocoStrings = new MemoryStream();
+        blocoStrings.WriteByte(0);   // offset 0 = string vazia
+        var offsets = new Dictionary<string, uint>();
+
+        foreach (var (_, nome) in linhas)
+        {
+            if (nome.Length == 0 || offsets.ContainsKey(nome)) continue;
+            offsets[nome] = (uint)blocoStrings.Length;
+            var bytes = System.Text.Encoding.UTF8.GetBytes(nome);
+            blocoStrings.Write(bytes, 0, bytes.Length);
+            blocoStrings.WriteByte(0);
+        }
+
+        var strings = blocoStrings.ToArray();
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+
+        w.Write(new[] { (byte)'W', (byte)'D', (byte)'B', (byte)'C' });
+        w.Write((uint)linhas.Length);
+        w.Write((uint)campos);
+        w.Write((uint)(campos * 4));
+        w.Write((uint)strings.Length);
+
+        foreach (var (id, nome) in linhas)
+        {
+            for (var c = 0; c < campos; c++)
+            {
+                if (c == 0) w.Write((uint)id);
+                else if (c == SpellDbc.CampoNome)
+                    w.Write(nome.Length > 0 ? offsets[nome] : 0u);
+                else w.Write(0u);
+            }
+        }
+
+        w.Write(strings);
+        return ms.ToArray();
+    }
+
+    var linhasSpell = new[]
+    {
+        (133, "Fireball"), (57353, "Heirloom Experience Bonus"), (2050, "Lesser Heal"),
+        (1, "Word of Recall"),
+    };
+
+    File.WriteAllBytes(Path.Combine(spellDir, "dbc", "Spell.dbc"),
+                       MontarSpellDbc(SpellDbc.CamposEsperados, linhasSpell));
+
+    var magias = SpellDbc.Read(spellDir);
+    Check("le o Spell.dbc", magias is not null && magias.Count == 4);
+    Check("le o id", magias!.Any(m => m.Id == 57353));
+    Check("le o nome", magias.First(m => m.Id == 133).Name == "Fireball");
+
+    Check("acha por nome", SpellDbc.Search(magias, "fire").Any(m => m.Id == 133));
+    Check("busca ignora maiusculas", SpellDbc.Search(magias, "FIREBALL").Count == 1);
+    Check("acha por id exato", SpellDbc.Search(magias, "57353")[0].Id == 57353);
+    Check("termo vazio nao devolve nada", SpellDbc.Search(magias, "  ").Count == 0);
+    Check("respeita o limite", SpellDbc.Search(magias, "e", limite: 2).Count <= 2);
+
+    // Layout diferente = nao sei ler. Devolver lista com lixo dentro faria
+    // prender no item a magia errada, e isso so apareceria dentro do jogo.
+    File.WriteAllBytes(Path.Combine(spellDir, "dbc", "Spell.dbc"),
+                       MontarSpellDbc(100, linhasSpell));
+    Check("layout diferente devolve null, nao lixo", SpellDbc.Read(spellDir) is null);
+
+    // Coluna certa mas tudo vazio: tambem nao da para confiar.
+    File.WriteAllBytes(Path.Combine(spellDir, "dbc", "Spell.dbc"),
+                       MontarSpellDbc(SpellDbc.CamposEsperados,
+                                      new[] { (1, ""), (2, ""), (3, ""), (4, "") }));
+    Check("arquivo sem nome nenhum devolve null", SpellDbc.Read(spellDir) is null);
+}
+finally
+{
+    try { Directory.Delete(spellDir, true); } catch { }
+}
+
 // ------------------------------------------------ arquivos .conf ---------
 Console.WriteLine("\n=== ConfFile: ler e editar .conf sem reescrever ===");
 

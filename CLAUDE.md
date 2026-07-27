@@ -95,6 +95,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\fix-playerbots-db.ps1      # creates the 4th DB the Playerbots fork needs
 .\scripts\fix-database.ps1          # missing *_dbc tables + empty realmlist
 .\scripts\fix-module-name.ps1       # mod-eluna -> mod-ale; preview, then -Apply
+.\scripts\apply-sql.ps1 -File x.sql  # backup + transaction; preview, then -Apply
 ```
 
 Every script above is reachable from the GUI (a test enforces it). The three
@@ -286,6 +287,21 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   the console has no character and no position. `send items` is `Console::Yes`,
   which is why the heirloom kit goes by mail: max 12 items per letter
   (`MAX_MAIL_ITEMS`).
+- **Creating an item is server-side; creating a spell is not.** A new row in
+  `item_template` is enough for a working item, but every buff, aura and "Use:"
+  effect lives in the client's `Spell.dbc` — a spell id the client does not have
+  has no name, no icon and no effect. So the item creator attaches **existing**
+  spells (`spellid_N`/`spelltrigger_N`) and says plainly that a genuinely new
+  aura needs a patched `Spell.dbc` inside an MPQ, which this tooling does not
+  write. `SpellDbc` reads the names out of the extracted `Spell.dbc`; it demands
+  `fieldCount == 234` (3.3.5a) and that most rows have a name, and returns
+  `null` rather than a list of garbage — a wrong name there would silently
+  attach the wrong spell.
+- **SQL generated for `item_template` must be built from the live column list**,
+  read from `information_schema`, never from the core's SQL tree — same reason
+  as `creature` above. `ItemBuilder.BuildSql` takes the columns as an argument
+  and reports what it dropped; the GUI reads them through `gm-items.ps1`, which
+  only executes `SELECT`.
 - Item icons work through `MpqArchive` + `BlpImage` (both in Core, both written
   here): `item_template.displayid` → `ItemDisplayInfo.dbc` → icon name →
   `Interface\Icons\NAME.blp` inside an MPQ → PNG in `Data\icons`. The DBC is
@@ -371,10 +387,18 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
     reads positionally, one format character per `SELECT *` column, so
     `CharSectionsEntryfmt = "diiixxxiii"` means exactly ten columns including the
     three unread `TexturePath` ones. Fixing only the first just renames the crash.
-  - `authserver` exits with `No valid realms specified.` when `realmlist` is
-    empty. `08-set-realm-address.ps1` used `UPDATE ... WHERE id = 1`, which
-    matches zero rows and reports no error, so the script said "realm
-    configurado" while the table stayed empty. It inserts now.
+  - `authserver` exits with `No valid realms specified.` when
+    `sRealmList->GetRealms()` is empty, and that list is filled by exactly one
+    query: `SELECT ... FROM realmlist WHERE flag <> 3`. So **a row is not
+    enough** — `flag = 3` (`VERSION_MISMATCH|OFFLINE`) is filtered out by the
+    query itself and the authserver behaves as if the table were empty, with no
+    message saying so. The shipped default is `flag = 2`. Two other ways to lose
+    the realm are visible in the log and so easier: an address that does not
+    resolve logs `Could not resolve address`, and a realm that loads logs
+    `Added realm "..."`. **If neither line appears, the query returned nothing** —
+    that is the fingerprint. `08-set-realm-address.ps1` also used
+    `UPDATE ... WHERE id = 1`, which matches zero rows and reports no error, so
+    it said "realm configurado" while the table stayed empty; it inserts now.
 - Playerbots and NPCBots are **not modules**: each requires replacing the core
   with a fork. Installing them over the stock core produces dozens of `C2660`
   errors. Switching forks deletes the source tree, and `modules/` lives inside

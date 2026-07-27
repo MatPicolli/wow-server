@@ -345,6 +345,118 @@ public static class FieldHelp
                 new HelpExample("Rate.MoveSpeed", "dá para procurar pela chave direto"),
             }),
 
+        // ------------------------------------------------------ criar itens
+        new FieldHelpEntry("novo.nome", "Nome do item novo",
+            "Como o item aparece no jogo. Vai para a coluna 'name', que aceita até "
+            + "255 caracteres. Acentos funcionam.",
+            new[]
+            {
+                new HelpExample("Elmo do Prestígio", "acentos e espaços são aceitos"),
+                new HelpExample("Poção do Viajante", "o nome não precisa ser único"),
+            }),
+
+        new FieldHelpEntry("novo.entry", "ID do item (entry)",
+            "O número que identifica o item. É por ele que passam '.additem' e "
+            + "'send items'. Precisa estar livre: gravar por cima de um ID que o "
+            + "jogo já usa quebra tudo que aponta para ele — receitas, lojas, loot.",
+            new[]
+            {
+                new HelpExample("800000", "início da faixa que o botão 'Sugerir um ID livre' usa"),
+                new HelpExample("800001", "o próximo — o botão pula o que já existe"),
+            })
+        {
+            Warning = "IDs de 700000 a 700047 já estão ocupados pelo set de herança "
+                    + "deste servidor. O botão de sugerir leva isso em conta porque "
+                    + "consulta o banco.",
+        },
+
+        new FieldHelpEntry("novo.tipo", "Para que serve",
+            "Um atalho: escolher aqui preenche categoria, subcategoria e vínculo com "
+            + "valores que combinam. Dá para ajustar tudo depois nos outros campos.",
+            new[]
+            {
+                new HelpExample("Equipamento", "ocupa um slot; use com armadura e atributos"),
+                new HelpExample("Usável", "clicar dispara a magia do efeito, e o item fica"),
+                new HelpExample("Consumível", "clicar dispara a magia e gasta uma carga"),
+            }),
+
+        new FieldHelpEntry("novo.slot", "Slot de equipamento",
+            "Onde a peça é vestida. É o que decide em que quadrado do personagem ela "
+            + "entra. Item que não é equipamento fica em 'Não equipável'.",
+            new[]
+            {
+                new HelpExample("Cabeça", "elmo"),
+                new HelpExample("Mão principal", "arma de uma mão"),
+                new HelpExample("Não equipável", "poção, material, item de missão"),
+            }),
+
+        new FieldHelpEntry("novo.qualidade", "Qualidade",
+            "A cor do nome no jogo, e nada mais — não muda atributo nenhum. "
+            + "Herança (7) é a única com efeito extra: itens dessa qualidade "
+            + "aparecem na busca de heranças e no envio em massa da aba Comandos.",
+            new[]
+            {
+                new HelpExample("Comum (branco)", "o padrão"),
+                new HelpExample("Épico (roxo)", "para o que deve parecer raro"),
+                new HelpExample("Herança (dourado)", "entra no kit de herança do servidor"),
+            }),
+
+        new FieldHelpEntry("novo.vinculo", "Vínculo",
+            "Se o item pode ser negociado depois de pego ou equipado. Num servidor "
+            + "de uma pessoa isso muda pouco, mas afeta poder mandar pelo correio "
+            + "para outro personagem seu.",
+            new[]
+            {
+                new HelpExample("Não vincula", "livre para mandar entre seus personagens"),
+                new HelpExample("Vincula ao pegar", "some a possibilidade de repassar"),
+            }),
+
+        new FieldHelpEntry("novo.delay", "Velocidade da arma",
+            "Em milissegundos: 1000 é 1,0 segundo por golpe. O jogo calcula o dano "
+            + "por segundo dividindo o dano médio por este número, então arma com "
+            + "velocidade zero mostra DPS quebrado.",
+            new[]
+            {
+                new HelpExample("1500", "adaga rápida"),
+                new HelpExample("2600", "espada de uma mão comum"),
+                new HelpExample("3600", "arma de duas mãos lenta"),
+            }),
+
+        new FieldHelpEntry("novo.magia", "Procurar magia",
+            "Procura no Spell.dbc extraído do seu client, por nome ou por ID. "
+            + "Clicar num resultado preenche a primeira linha de efeito vazia. "
+            + "Só dá para usar magia que já existe no jogo.",
+            new[]
+            {
+                new HelpExample("cura", "acha as magias com 'cura' no nome"),
+                new HelpExample("57353", "procura o ID exato — o +10% de XP das heranças"),
+            })
+        {
+            Warning = "Se a lista não abrir, o Spell.dbc não foi extraído ainda. "
+                    + "Ele sai junto com os outros .dbc na etapa 5 da instalação. "
+                    + "Sem ele dá para digitar o ID da magia à mão do mesmo jeito.",
+        },
+
+        new FieldHelpEntry("novo.extra", "Colunas à mão",
+            "Uma por linha, no formato 'coluna = valor'. Serve para o que a tela não "
+            + "expõe. O valor é ou um número, ou texto entre aspas simples. Coluna "
+            + "que não existir no seu banco é descartada com aviso, em vez de "
+            + "derrubar o comando inteiro.",
+            new[]
+            {
+                new HelpExample("ScalingStatDistribution = 61",
+                    "faz os atributos escalarem com o nível, como nas heranças"),
+                new HelpExample("socketColor_1 = 2", "abre um encaixe de gema vermelho"),
+                new HelpExample("ScriptName = 'meu_script'",
+                    "liga o item a um script C++ compilado no core"),
+            })
+        {
+            Warning = "O banco deste servidor está num schema mais antigo que o "
+                    + "código-fonte, então nem toda coluna do AzerothCore existe "
+                    + "aqui. Por isso a lista de colunas é lida do banco de verdade "
+                    + "antes de montar o comando.",
+        },
+
         new FieldHelpEntry("item.nome", "Nome do item",
             "Procura por parte do nome, sem diferenciar maiúsculas. Deixe vazio para "
             + "trazer tudo que passar pelos outros filtros.",

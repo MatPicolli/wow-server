@@ -375,8 +375,30 @@ nome na próxima tentativa, então o script cria as duas.
 
 ### `No valid realms specified.` e o authserver se desliga
 
-A tabela `realmlist` está vazia. Até esta versão o `08-set-realm-address.ps1`
-fazia um `UPDATE ... WHERE id = 1`, que numa tabela vazia atualiza zero linhas
-sem dar erro nenhum — o script dizia "realm configurado" e o authserver
-continuava caindo. Agora ele insere; o `fix-database.ps1` conserta quem já
-passou pela versão antiga.
+O authserver enche a lista de realms com **uma** consulta:
+
+```sql
+SELECT ... FROM realmlist WHERE flag <> 3
+```
+
+Então ter linha na tabela não basta. São três jeitos de perdê-la, e só dois
+aparecem no log:
+
+| O que acontece | O que o log diz |
+|---|---|
+| A tabela está vazia | nada — só `No valid realms specified.` |
+| A linha está com `flag = 3` | **nada também** — a consulta a descarta |
+| O endereço não resolve | `Could not resolve address ...` |
+
+Quando um realm é carregado, o log escreve `Added realm "..." at 127.0.0.1:8085.`
+**Se essa linha não aparecer e também não houver `Could not resolve`, a consulta
+não trouxe nada** — é a tabela vazia ou a `flag`. O `flag = 3` é
+`VERSION_MISMATCH | OFFLINE`; o valor com que o AzerothCore cadastra o realm
+padrão é `2`, e o worldserver troca para online quando conecta.
+
+O `fix-database.ps1` mostra a tabela, conta quantos realms o authserver
+realmente enxerga, e conserta os três casos.
+
+Até esta versão o `08-set-realm-address.ps1` fazia um `UPDATE ... WHERE id = 1`,
+que numa tabela vazia atualiza zero linhas sem dar erro nenhum — o script dizia
+"realm configurado" e o authserver continuava caindo. Agora ele insere.

@@ -122,7 +122,16 @@ foreach ($nome in $tabelas.Keys) {
     $consertos++
 }
 
-# --- 2) realm nenhum cadastrado ---------------------------------------------
+# --- 2) realm que o authserver nao enxerga ----------------------------------
+# "No valid realms specified." e simplesmente sRealmList->GetRealms() vazio. O
+# que enche essa lista e UMA consulta, em LoginDatabase.cpp:
+#
+#     SELECT ... FROM realmlist WHERE flag <> 3 ORDER BY name
+#
+# Ou seja: nao basta existir linha na tabela. Uma linha com flag = 3
+# (VERSION_MISMATCH 0x1 | OFFLINE 0x2) e filtrada pela propria consulta e o
+# authserver se comporta como se a tabela estivesse vazia - sem reclamar de
+# nada, porque para ele nao ha linha nenhuma.
 Write-Step "Realm em $($m.AuthDb)"
 
 $temTabela = Invoke-MySql -Settings $settings -User $m.User -Password $m.Password `
@@ -130,26 +139,80 @@ $temTabela = Invoke-MySql -Settings $settings -User $m.User -Password $m.Passwor
 
 if ($temTabela -notmatch 'realmlist') {
     Write-Warn "a tabela realmlist ainda nao existe em $($m.AuthDb)"
-    Write-Info 'suba o servidor uma vez para ele popular os bancos e rode este script de novo'
+    Write-Info 'ela e criada na importacao do banco de auth. Suba o servidor uma vez'
+    Write-Info 'para ele popular os bancos e RODE ESTE SCRIPT DE NOVO - sem isso o'
+    Write-Info 'authserver continua desligando com "No valid realms specified.".'
 } else {
-    $quantos = (Invoke-MySql -Settings $settings -User $m.User -Password $m.Password `
-                             -Database $m.AuthDb -Sql 'SELECT COUNT(*) FROM realmlist;' -Quiet)
-    $quantos = ([regex]::Match($quantos, '\d+')).Value
+    # Mostrar o que existe: os dois motivos de falha sao invisiveis no log do
+    # servidor, entao a tabela em si e a unica evidencia.
+    $tabela = Invoke-MySql -Settings $settings -User $m.User -Password $m.Password `
+                           -Database $m.AuthDb `
+                           -Sql 'SELECT id, name, address, port, flag FROM realmlist ORDER BY id;'
+    if ($tabela) { Write-Host $tabela -ForegroundColor DarkGray }
 
-    if ($quantos -and [int]$quantos -gt 0) {
-        Write-Ok "ja ha $quantos realm(s) cadastrado(s)"
-    } else {
+    # Contagem em duas medidas: quantas linhas existem, e quantas o authserver
+    # de fato enxerga. A diferenca entre as duas E o problema.
+    $total = ([regex]::Match((Invoke-MySql -Settings $settings -User $m.User -Password $m.Password `
+                                           -Database $m.AuthDb `
+                                           -Sql 'SELECT COUNT(*) FROM realmlist;' -Quiet), '\d+')).Value
+    $visiveis = ([regex]::Match((Invoke-MySql -Settings $settings -User $m.User -Password $m.Password `
+                                              -Database $m.AuthDb `
+                                              -Sql 'SELECT COUNT(*) FROM realmlist WHERE flag <> 3;' -Quiet), '\d+')).Value
+
+    $total    = if ($total)    { [int]$total }    else { 0 }
+    $visiveis = if ($visiveis) { [int]$visiveis } else { 0 }
+
+    if ($total -eq 0) {
         $safeName = $Name -replace "'", "''"
         $safeAddr = $Address -replace "'", "''"
 
+        # flag = 2 (OFFLINE) e o valor com que o proprio AzerothCore cadastra o
+        # realm padrao; o worldserver troca para online quando conecta.
         Invoke-MySql -Settings $settings -User $m.User -Password $m.Password -Database $m.AuthDb -Sql @"
-INSERT INTO realmlist (id, name, address, localAddress, localSubnetMask, port)
-VALUES (1, '$safeName', '$safeAddr', '127.0.0.1', '255.255.255.0', $Port)
-ON DUPLICATE KEY UPDATE name = VALUES(name), address = VALUES(address), port = VALUES(port);
+INSERT INTO realmlist (id, name, address, localAddress, localSubnetMask, port, flag, gamebuild)
+VALUES (1, '$safeName', '$safeAddr', '127.0.0.1', '255.255.255.0', $Port, 2, 12340)
+ON DUPLICATE KEY UPDATE name = VALUES(name), address = VALUES(address),
+                        port = VALUES(port), flag = VALUES(flag);
 "@ | Out-Null
 
         Write-Ok "realm '$Name' criado em $Address`:$Port"
-        Write-Info 'era isso que fazia o authserver desligar com "No valid realms specified."'
+        Write-Info 'a tabela estava vazia - era isso que desligava o authserver'
+        $consertos++
+    }
+    elseif ($visiveis -eq 0) {
+        # Existe linha, mas TODA linha esta com flag = 3 e a consulta do
+        # authserver descarta todas. Da na mesma que tabela vazia, e nao ha
+        # nenhuma mensagem no log dizendo isso.
+        Write-Warn "ha $total realm(s) cadastrado(s), mas nenhum com flag <> 3"
+        Write-Info 'a consulta do authserver descarta flag = 3 (VERSION_MISMATCH|OFFLINE),'
+        Write-Info 'entao para ele a tabela esta vazia'
+
+        Invoke-MySql -Settings $settings -User $m.User -Password $m.Password -Database $m.AuthDb `
+                     -Sql 'UPDATE realmlist SET flag = 2 WHERE flag = 3;' | Out-Null
+
+        Write-Ok 'flag corrigida para 2 (offline) - o worldserver poe online ao conectar'
+        $consertos++
+    }
+    else {
+        Write-Ok "$visiveis realm(s) visivel(is) para o authserver"
+    }
+
+    # Endereco que nao resolve faz o realm ser descartado, mas ai o log DIZ
+    # ("Could not resolve address ..."). Conferir aqui evita confundir os dois.
+    $semEndereco = ([regex]::Match((Invoke-MySql -Settings $settings -User $m.User -Password $m.Password `
+                                                 -Database $m.AuthDb `
+                                                 -Sql "SELECT COUNT(*) FROM realmlist WHERE address = '' OR localAddress = '' OR localSubnetMask = '';" -Quiet), '\d+')).Value
+    if ($semEndereco -and [int]$semEndereco -gt 0) {
+        Write-Warn "$semEndereco realm(s) com endereco em branco"
+        Write-Info 'o authserver descarta esses e escreve "Could not resolve address" no log'
+        Invoke-MySql -Settings $settings -User $m.User -Password $m.Password -Database $m.AuthDb -Sql @"
+UPDATE realmlist
+   SET address         = CASE WHEN address = '' THEN '$($Address -replace "'", "''")' ELSE address END,
+       localAddress    = CASE WHEN localAddress = '' THEN '127.0.0.1' ELSE localAddress END,
+       localSubnetMask = CASE WHEN localSubnetMask = '' THEN '255.255.255.0' ELSE localSubnetMask END
+ WHERE address = '' OR localAddress = '' OR localSubnetMask = '';
+"@ | Out-Null
+        Write-Ok 'enderecos em branco preenchidos'
         $consertos++
     }
 }
