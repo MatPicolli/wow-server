@@ -167,7 +167,7 @@
                 </StackPanel>
             </GroupBox>
 
-            <StackPanel Orientation="Horizontal" Margin="0,4,0,24">
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,14">
                 <Button Content="Salvar" Style="{StaticResource BotaoPrincipal}" Click="Salvar_Click" />
                 <Button Content="Recarregar" Click="Recarregar_Click" />
                 <Button Content="Abrir o arquivo" Click="AbrirArquivo_Click" />
@@ -175,6 +175,22 @@
             </StackPanel>
 
             <TextBlock x:Name="TxtStatus" Foreground="{StaticResource Ok}" FontSize="12" Margin="0,0,0,20" />
+
+            <GroupBox Header="Reparos">
+                <StackPanel>
+                    <TextBlock Foreground="{StaticResource TextDim}" FontSize="11" TextWrapping="Wrap"
+                               Margin="0,0,0,10"
+                               Text="Ferramentas para quando algo saiu do lugar. Todas mostram o que fariam antes de mexer." />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Consertar este arquivo" Click="RepararSettings_Click"
+                                ToolTip="Remove chaves repetidas do settings.psd1. Uma chave duplicada faz o arquivo inteiro deixar de ser lido, e todos os scripts param." />
+                        <Button Content="Recomeçar do zero" Click="Reset_Click"
+                                ToolTip="Apaga código, compilação e servidor para reinstalar — preservando a pasta Data, que leva horas para extrair. Mostra o que apagaria antes." />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <v:ConsolePane x:Name="SaidaReparo" Height="200" Margin="0,0,0,20" />
 
         </StackPanel>
     </ScrollViewer>

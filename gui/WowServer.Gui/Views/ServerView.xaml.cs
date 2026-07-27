@@ -37,6 +37,57 @@ public partial class ServerView : UserControl
         estado.ServerSideBySide = _ladoALado;
     }
 
+    /// <summary>
+    /// Sobe o servico do MySQL. Vai para janela propria: iniciar servico exige
+    /// Administrador, e processo elevado nao aceita saida redirecionada.
+    /// </summary>
+    private async void MySql_Click(object sender, RoutedEventArgs e)
+    {
+        var runner = Session.Current.CreateRunner();
+        if (!runner.ScriptExists("start-mysql.ps1"))
+        {
+            PainelWorld.Append("[erro] scripts\\start-mysql.ps1 não encontrado — atualize o repositório", OutputKind.Error);
+            return;
+        }
+
+        PainelWorld.Append("==> abrindo uma janela separada: iniciar o serviço pede Administrador");
+
+        var codigo = await ScriptConsole.RunAsync(
+            runner.ScriptsDir, Session.Current.RepoRoot, "start-mysql.ps1",
+            new[] { "-Automatic" }, admin: true);
+
+        PainelWorld.Append(codigo switch
+        {
+            0 => "[ok] MySQL respondendo — pode iniciar o servidor",
+            -1 => "[erro] elevação recusada: sem Administrador não dá para iniciar o serviço",
+            _ => $"[erro] terminou com código {codigo}",
+        }, codigo == 0 ? OutputKind.Normal : OutputKind.Error);
+    }
+
+    /// <summary>
+    /// Conserta as duas coisas que impedem um servidor novo de subir: as
+    /// tabelas de DBC que o codigo compilado consulta e o SQL do core nao cria,
+    /// e a tabela realmlist vazia.
+    ///
+    /// Roda com o usuario do proprio servidor, que ja tem privilegio nos bancos
+    /// dele - por isso nao precisa de senha de root nem de janela separada.
+    /// </summary>
+    private async void CorrigirBanco_Click(object sender, RoutedEventArgs e)
+    {
+        var runner = Session.Current.CreateRunner();
+        if (!runner.ScriptExists("fix-database.ps1"))
+        {
+            PainelWorld.Append("[erro] scripts\\fix-database.ps1 não encontrado — atualize o repositório", OutputKind.Error);
+            return;
+        }
+
+        runner.Output += linha => Dispatcher.Invoke(() => PainelWorld.Append(linha.Text, linha.Kind));
+
+        PainelWorld.Append("==> conferindo o banco");
+        try { await runner.RunAsync("fix-database.ps1"); }
+        catch (Exception ex) { PainelWorld.Append($"[erro] {ex.Message}", OutputKind.Error); }
+    }
+
     private void EnviarComando(string comando)
     {
         try

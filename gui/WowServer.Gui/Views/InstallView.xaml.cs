@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -235,46 +234,15 @@ public partial class InstallView : UserControl
         }
         Saida.Append("    acompanhe o progresso por lá; ao fechar, o resultado aparece aqui");
 
-        var script = System.IO.Path.Combine(_runner.ScriptsDir, passo.Script);
+        // A montagem do comando e a abertura da janela vivem no ScriptConsole:
+        // as telas de Modulos, Servidor e Configuracoes precisam do mesmo
+        // caminho, e duas copias disso divergiriam no primeiro conserto.
+        var codigo = await ScriptConsole.RunAsync(
+            _runner.ScriptsDir, Session.Current.RepoRoot, passo.Script,
+            passo.Arguments, admin: passo.RequiresAdmin);
 
-        // -NoExit deixaria a janela aberta e o codigo de saida seria o de fechar
-        // a janela, nao o do script: uma senha errada voltaria como sucesso.
-        // Entao o script roda dentro de -Command, a janela espera um Enter para
-        // o usuario ler o que aconteceu, e o codigo original e devolvido.
-        var caminho = script.Replace("'", "''");
-        var comando =
-            $"& '{caminho}'; "
-            + "$c = $LASTEXITCODE; "
-            + "if ($null -eq $c) { $c = 0 }; "
-            + "Write-Host ''; "
-            + "if ($c -ne 0) { Write-Host '=== a etapa FALHOU - leia a mensagem acima ===' -ForegroundColor Red }; "
-            + "Read-Host 'Pressione Enter para fechar esta janela' | Out-Null; "
-            + "exit $c";
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{comando}\"",
-            WorkingDirectory = Session.Current.RepoRoot,
-            UseShellExecute = true,
-        };
-
-        // 'runas' so quando e mesmo necessario: pedir UAC para digitar uma senha
-        // de banco seria pedir privilegio a toa.
-        if (passo.RequiresAdmin) psi.Verb = "runas";
-
-        try
-        {
-            using var p = Process.Start(psi);
-            if (p is null) return -1;
-            await p.WaitForExitAsync().ConfigureAwait(true);
-            return p.ExitCode;
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            Saida.Append("[erro] elevação recusada", OutputKind.Error);
-            return -1;
-        }
+        if (codigo == -1) Saida.Append("[erro] elevação recusada", OutputKind.Error);
+        return codigo;
     }
 
     private void Marcar(EtapaItem item, string marcador, string chaveCor)

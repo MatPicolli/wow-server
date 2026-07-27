@@ -29,7 +29,28 @@ public sealed class ModuloItem
     public string? PassoManual { get; init; }
     public required bool Instalado { get; init; }
 
+    /// <summary>Os .conf que este modulo gerou em configs\modules.</summary>
+    public IReadOnlyList<ModuleConfFile> Configs { get; init; } = Array.Empty<ModuleConfFile>();
+
     public Visibility VisibilidadeRemover => Instalado ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>
+    /// O botao de configurar aparece em todo modulo instalado, e so fica
+    /// clicavel quando ha .conf de verdade. Escondê-lo quando nao ha deixaria a
+    /// pergunta "cade a configuracao deste?" sem resposta na tela.
+    /// </summary>
+    public Visibility VisibilidadeConfigurar => VisibilidadeRemover;
+    public bool PodeConfigurar => Configs.Count > 0;
+
+    public string DicaConfigurar => Configs.Count switch
+    {
+        0 => "Este módulo não gerou nenhum .conf em configs\\modules. Ou ele não tem "
+             + "configuração, ou o servidor ainda não foi implantado depois de instalá-lo "
+             + "(rode Recompilar).",
+        1 => $"Edita {Configs[0].FileName}, com a explicação de cada opção que vem no "
+             + "próprio arquivo.",
+        _ => $"Edita os {Configs.Count} arquivos de configuração deste módulo.",
+    };
     public Visibility VisibilidadeAlerta => Alerta is null ? Visibility.Collapsed : Visibility.Visible;
     public Visibility VisibilidadePassoManual =>
         PassoManual is null ? Visibility.Collapsed : Visibility.Visible;
@@ -159,6 +180,7 @@ public partial class ModulesView : UserControl
         var itens = new List<ModuloItem>();
         var cfg = Session.Current.Loaded;
         var instaladosSoltos = ModulosInstaladosForaDoCatalogo();
+        var confs = DescobrirConfigs();
 
         foreach (var m in ModuleCatalog.All)
         {
@@ -221,6 +243,7 @@ public partial class ModulesView : UserControl
                 },
                 Alerta = coreErrado ? MontarAlertaDeCore(m, coreReal!, cfg) : null,
                 PassoManual = m.ManualStep,
+                Configs = instalado ? ConfigsDe(confs, m.Name) : Array.Empty<ModuleConfFile>(),
             });
         }
 
@@ -244,11 +267,57 @@ public partial class ModulesView : UserControl
                 Acao = AcaoModulo.Nenhuma,
                 PodeInstalar = false,
                 TextoBotao = "Já instalado",
+                Configs = ConfigsDe(confs, nome),
             });
         }
 
         _todos = itens;
         AplicarFiltro();
+        AtualizarPainelRenomear();
+    }
+
+    /// <summary>
+    /// Todos os .conf de configs\modules, lidos uma vez por recarga em vez de
+    /// uma varredura de disco por card.
+    /// </summary>
+    private IReadOnlyList<ModuleConfFile> DescobrirConfigs()
+    {
+        var server = Session.Current.Loaded?.ServerDir;
+        if (string.IsNullOrWhiteSpace(server)) return Array.Empty<ModuleConfFile>();
+
+        // Passa TODOS os nomes conhecidos: o dono de cada arquivo e resolvido de
+        // uma vez, e depois cada card so filtra pelo seu.
+        var nomes = ModuleCatalog.All.Select(m => m.Name)
+            .Concat(ModulosInstaladosForaDoCatalogo())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        try { return ModuleConfigs.Discover(server, nomes); }
+        catch (Exception ex)
+        {
+            Saida.Append($"[aviso] não consegui listar as configurações dos módulos: {ex.Message}");
+            return Array.Empty<ModuleConfFile>();
+        }
+    }
+
+    private static IReadOnlyList<ModuleConfFile> ConfigsDe(
+        IReadOnlyList<ModuleConfFile> todos, string pasta) =>
+        todos.Where(c => string.Equals(c.ModuleName, pasta, StringComparison.OrdinalIgnoreCase))
+             .ToList();
+
+    private void Configurar_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button b || b.Tag is not string pasta) return;
+
+        var item = _todos.FirstOrDefault(
+            i => string.Equals(i.Pasta, pasta, StringComparison.OrdinalIgnoreCase));
+        if (item is null || item.Configs.Count == 0) return;
+
+        var janela = new ModuleConfigWindow(item.Nome, item.Configs)
+        {
+            Owner = Window.GetWindow(this),
+        };
+        janela.ShowDialog();
     }
 
     /// <summary>
@@ -481,6 +550,82 @@ public partial class ModulesView : UserControl
     /// confirmacao vem depois de ver o tamanho da pasta e se ha trabalho local
     /// nao commitado, em vez de antes.
     /// </summary>
+    /// <summary>
+    /// Mostra o aviso da pasta com nome antigo. Chamado a cada recarga, porque
+    /// o estado muda por fora (git clone, renomear na mao, remover).
+    /// </summary>
+    private void AtualizarPainelRenomear()
+    {
+        if (PainelRenomear is null) return;
+
+        var achados = RenamedModules.Detect(ModulesDir);
+
+        if (achados.Count == 0)
+        {
+            PainelRenomear.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var r = achados[0];
+        PainelRenomear.Visibility = Visibility.Visible;
+        TxtRenomear.Text = r.Explanation;
+
+        // Com as duas pastas no lugar, renomear juntaria duas copias do mesmo
+        // codigo - quem escolhe qual fica e o usuario, pelo botao Remover.
+        BtnRenomear.IsEnabled = !r.Conflict;
+        BtnRenomear.Content = r.Conflict ? "Remova a pasta antiga" : $"Renomear para {r.Correct}";
+    }
+
+    private async void Renomear_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_runner.ScriptExists("fix-module-name.ps1"))
+        {
+            Saida.Append("[erro] scripts\\fix-module-name.ps1 não encontrado — atualize o repositório", OutputKind.Error);
+            return;
+        }
+
+        Saida.Append("==> o que seria renomeado");
+        await _runner.RunAsync("fix-module-name.ps1");
+
+        var resposta = MessageBox.Show(
+            "Renomear a pasta do módulo?\n\n"
+            + "É só a pasta: o código não muda. É por esse nome que o CMake do core "
+            + "liga a biblioteca Lua ao alvo dos módulos.\n\n"
+            + "Depois disso, use Recompilar.",
+            "Renomear módulo", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (resposta != MessageBoxResult.Yes) return;
+
+        await _runner.RunAsync("fix-module-name.ps1", new[] { "-Apply" });
+        await AtualizarComConfiguracoesAsync();
+    }
+
+    /// <summary>
+    /// Cria o quarto banco que o fork do Playerbots usa e corrige a linha de
+    /// conexao do playerbots.conf.
+    ///
+    /// Vai para janela propria porque o script pergunta a senha do root do
+    /// MySQL, e o ScriptRunner roda com -NonInteractive.
+    /// </summary>
+    private async void FixPlayerbots_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_runner.ScriptExists("fix-playerbots-db.ps1"))
+        {
+            Saida.Append("[erro] scripts\\fix-playerbots-db.ps1 não encontrado — atualize o repositório", OutputKind.Error);
+            return;
+        }
+
+        Saida.Append("==> abrindo uma janela separada: o script pede a senha do root do MySQL");
+        Saida.Append("    (ela não fica salva em lugar nenhum)");
+
+        var codigo = await ScriptConsole.RunAsync(
+            _runner.ScriptsDir, Session.Current.RepoRoot, "fix-playerbots-db.ps1");
+
+        Saida.Append(codigo == 0
+            ? "[ok] terminou — suba o servidor de novo"
+            : $"[erro] terminou com código {codigo}",
+            codigo == 0 ? OutputKind.Normal : OutputKind.Error);
+    }
+
     private async void Remover_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: string pasta } || string.IsNullOrWhiteSpace(pasta)) return;

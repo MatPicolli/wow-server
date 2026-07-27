@@ -23,6 +23,13 @@
             <Button x:Name="BtnMatar" Content="Forçar encerramento" Click="Matar_Click" IsEnabled="False"
                     ToolTip="Mata o processo. Perde o que ainda não foi salvo — use só se travar." />
 
+            <!-- Os dois motivos mais comuns de o servidor nao subir, e nenhum
+                 deles tem mensagem que aponte para a causa. -->
+            <Button x:Name="BtnMySql" Content="Iniciar o MySQL" Click="MySql_Click"
+                    ToolTip="O MySQL é instalado com início Manual, então costuma estar parado depois de reiniciar o PC. Abre uma janela: precisa de Administrador." />
+            <Button x:Name="BtnCorrigirBanco" Content="Corrigir o banco" Click="CorrigirBanco_Click"
+                    ToolTip="Cria as tabelas de DBC que faltam no acore_world e cadastra o realm quando não há nenhum. É o que resolve o worldserver caindo no início e o authserver dizendo 'No valid realms specified.'" />
+
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                 <TextBlock Text="Layout:" VerticalAlignment="Center" Margin="0,0,8,0"
                            Foreground="{StaticResource TextDim}" />

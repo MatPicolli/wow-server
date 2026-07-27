@@ -355,3 +355,28 @@ $PSVersionTable.PSVersion
 
 Feche e reabra o PowerShell. Variáveis de ambiente (`PATH`, `BOOST_ROOT`) só
 entram em sessões novas.
+
+## O servidor não sobe depois de instalar do zero
+
+Dois problemas diferentes, os dois com mensagem que não aponta para a causa.
+O botão **Corrigir o banco**, na aba Servidor, resolve os dois de uma vez
+(ou `.\scripts\fix-database.ps1`). Pode rodar quantas vezes quiser.
+
+### `Table 'acore_world.charsections_dbc' doesn't exist`
+
+O worldserver morre logo no início, carregando os DBC, e manda rodar os
+updates do banco — que já rodaram: a linha de cima do log diz *"World database
+is up-to-date!"*.
+
+O código compilado consulta duas tabelas que não existem no SQL do fork:
+`charsections_dbc` e `emotetextsound_dbc`. Elas podem ficar **vazias** — o
+servidor cai de volta no `.dbc` do cliente. Criar só a primeira apenas troca o
+nome na próxima tentativa, então o script cria as duas.
+
+### `No valid realms specified.` e o authserver se desliga
+
+A tabela `realmlist` está vazia. Até esta versão o `08-set-realm-address.ps1`
+fazia um `UPDATE ... WHERE id = 1`, que numa tabela vazia atualiza zero linhas
+sem dar erro nenhum — o script dizia "realm configurado" e o authserver
+continuava caindo. Agora ele insere; o `fix-database.ps1` conserta quem já
+passou pela versão antiga.

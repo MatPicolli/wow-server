@@ -93,7 +93,14 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\gm-heirlooms.ps1 -Character X     # mails every heirloom the DB has
 .\scripts\gm-items.ps1 -Query "SELECT ..."   # read-only; the GUI item browser calls it
 .\scripts\fix-playerbots-db.ps1      # creates the 4th DB the Playerbots fork needs
+.\scripts\fix-database.ps1          # missing *_dbc tables + empty realmlist
+.\scripts\fix-module-name.ps1       # mod-eluna -> mod-ale; preview, then -Apply
 ```
+
+Every script above is reachable from the GUI (a test enforces it). The three
+exceptions are deliberate: `start-server.ps1`/`stop-server.ps1` are replaced by
+`ServerController`, which streams both consoles live, and `setup-all.ps1` by the
+step list in `InstallPlan`.
 
 Numbered scripts `00`–`08` are the install pipeline and are individually
 runnable and idempotent. `01-install-prereqs.ps1` needs Administrator.
@@ -144,7 +151,14 @@ than returning `$null`.
 
 The GUI edits this file surgically through `Psd1Editor` rather than
 regenerating it, because the file is mostly explanatory comments meant to be
-read and hand-edited.
+read and hand-edited. `ConfFile` does the same job for AzerothCore's `.conf`
+files, for the same reason — those are ~80% comment, and that comment is what
+the module config window shows as each option's help. Verified against the real
+`worldserver.conf.dist` (589 keys) plus three real module configs: changing one
+key rewrites exactly one line out of 4880 and preserves the alignment. Note a
+blank line between a comment block and its key is the *normal* layout there, so
+blank lines must not end the comment — doing that dropped every explanation in
+the file.
 
 ### GUI project split
 
@@ -345,6 +359,22 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   Playerbots-specific: master and the fork carry the identical check.
   `Get-RenamedModule` detects the stale folder and `rebuild.ps1` refuses to
   build until it is renamed (`-Force` overrides).
+- **Two things stop a freshly built server from starting, and neither message
+  points at the cause.** `fix-database.ps1` repairs both, idempotently.
+  - `worldserver` aborts loading DBC stores with `[1146] Table
+    'acore_world.charsections_dbc' doesn't exist` and *"make sure you've executed
+    all queries in the sql/updates folders"* — while the updater says the world
+    DB is up to date on the line above. The compiled loader queries
+    `charsections_dbc` and `emotetextsound_dbc`, which exist nowhere in the
+    fork's SQL tree. They may stay **empty**: `DBCStorageBase::LoadFromDB` falls
+    back to the client `.dbc`. Column names and count are not free — the loader
+    reads positionally, one format character per `SELECT *` column, so
+    `CharSectionsEntryfmt = "diiixxxiii"` means exactly ten columns including the
+    three unread `TexturePath` ones. Fixing only the first just renames the crash.
+  - `authserver` exits with `No valid realms specified.` when `realmlist` is
+    empty. `08-set-realm-address.ps1` used `UPDATE ... WHERE id = 1`, which
+    matches zero rows and reports no error, so the script said "realm
+    configurado" while the table stayed empty. It inserts now.
 - Playerbots and NPCBots are **not modules**: each requires replacing the core
   with a fork. Installing them over the stock core produces dozens of `C2660`
   errors. Switching forks deletes the source tree, and `modules/` lives inside
@@ -378,6 +408,14 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 
 **WPF**
 
+- The implicit `TextBlock` style reaches **inside control templates**. `ComboBox`
+  keeps the default Windows chrome, which has a *light* background, so a global
+  near-white `Foreground` made both the closed box and the open list unreadable.
+  Setting `ComboBox.Foreground` does not fix it — a style setter on `TextBlock`
+  beats an inherited colour. The fix is a `TextBlock` style inside
+  `<ComboBox.Resources>`; the popup is part of that tree, so it inherits too.
+  It cannot be folded into a `Style` setter: `FrameworkElement.Resources` is a
+  plain CLR property, and `Setter.Property` only accepts a `DependencyProperty`.
 - Setting a property like `IsChecked="True"` in XAML raises its changed event
   during `InitializeComponent`, when elements declared later do not exist yet.
   Set such initial values in the constructor.

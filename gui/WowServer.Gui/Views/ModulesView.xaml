@@ -18,7 +18,23 @@
                     <Button Content="Recompilar" Click="Rebuild_Click"
                             ToolTip="Refaz build, deploy e configuração. Use depois de instalar ou atualizar módulos." />
                     <Button Content="Atualizar instalados" Click="Atualizar_Click" />
+                    <Button Content="Corrigir o banco do Playerbots" Click="FixPlayerbots_Click"
+                            ToolTip="Cria o quarto banco que o fork usa e corrige a linha de conexão do playerbots.conf. Abre uma janela: pede a senha do root do MySQL, que não fica salva." />
                 </StackPanel>
+
+                <!-- Pasta com nome que o core nao reconhece mais. Sem isto a
+                     unica pista e a compilacao morrendo em 25 erros iguais,
+                     meia hora depois de comecar. -->
+                <Border x:Name="PainelRenomear" Visibility="Collapsed"
+                        Background="#2A241A" BorderBrush="{StaticResource Warn}"
+                        BorderThickness="1" CornerRadius="3" Padding="10,8" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock x:Name="TxtRenomear" TextWrapping="Wrap" FontSize="11"
+                                   Foreground="{StaticResource Warn}" Margin="0,0,0,8" />
+                        <Button x:Name="BtnRenomear" Content="Renomear a pasta" HorizontalAlignment="Left"
+                                Padding="10,4" FontSize="12" Click="Renomear_Click" />
+                    </StackPanel>
+                </Border>
 
                 <DockPanel Margin="0,0,0,10">
                     <TextBlock DockPanel.Dock="Left" Text="Filtrar" VerticalAlignment="Center"
@@ -100,6 +116,11 @@
                                         <Button Content="{Binding TextoBotao}" Padding="10,4" FontSize="12"
                                                 Tag="{Binding Nome}" Click="Instalar_Click"
                                                 IsEnabled="{Binding PodeInstalar}" />
+                                        <Button Content="Configurações" Padding="10,4" FontSize="12"
+                                                Tag="{Binding Pasta}" Click="Configurar_Click"
+                                                Visibility="{Binding VisibilidadeConfigurar}"
+                                                IsEnabled="{Binding PodeConfigurar}"
+                                                ToolTip="{Binding DicaConfigurar}" />
                                         <Button Content="Abrir no navegador" Padding="10,4" FontSize="12"
                                                 Tag="{Binding Repositorio}" Click="Abrir_Click" />
                                         <Button Content="Remover" Padding="10,4" FontSize="12"

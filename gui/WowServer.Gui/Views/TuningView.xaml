@@ -121,7 +121,7 @@
                      tem lista, botoes e aviso proprios. -->
                 <TextBlock Text="Ajustes do servidor" Style="{StaticResource Titulo}" Margin="0,10,0,0" />
                 <TextBlock Style="{StaticResource Subtitulo}"
-                           Text="Estes ficam no worldserver.conf, não no banco. Valem quando o servidor for reiniciado. Deixe em branco o que não quiser mexer." />
+                           Text="Estes ficam no worldserver.conf, não no banco. Valem quando o servidor for reiniciado. Cada linha mostra o valor que está no arquivo agora, em dourado quando já foi mexido. Deixe a caixa em branco para não alterar aquela chave." />
 
                 <DockPanel Margin="0,0,0,10">
                     <TextBlock DockPanel.Dock="Left" Text="Filtrar" VerticalAlignment="Center"
@@ -143,7 +143,7 @@
                                     <StackPanel>
                                         <TextBlock Text="{Binding Rotulo}" FontSize="13" TextWrapping="Wrap" />
                                         <TextBlock Text="{Binding Detalhe}" FontSize="10" TextWrapping="Wrap"
-                                                   Foreground="{StaticResource TextDim}" />
+                                                   Foreground="{Binding CorDetalhe}" />
                                     </StackPanel>
                                 </DockPanel>
                             </Border>

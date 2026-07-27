@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using WowServer.Core;
 
 namespace WowServer.Gui.Views;
@@ -34,6 +35,15 @@ public partial class TuningView : UserControl
             Dispatcher.Invoke(() => Saida.Append(linha.Text, linha.Kind));
 
         MontarAjustesConf();
+
+        // A view e construida antes de Session.Current.Loaded existir, entao o
+        // valor atual so pode ser lido em Loaded - e SEM guardar com
+        // 'if (Loaded is null)', porque outra tela pode ja ter carregado as
+        // configuracoes e ai a releitura que interessa seria justamente a
+        // pulada. Tambem em IsVisibleChanged: quem aplicar um ajuste por fora
+        // (script, editor de texto) ve o novo valor ao voltar para a aba.
+        Loaded += (_, _) => LerValoresAtuais();
+        IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) LerValoresAtuais(); };
     }
 
     /// <summary>Repoe o que o usuario tinha digitado na sessao anterior.</summary>
@@ -191,6 +201,40 @@ public partial class TuningView : UserControl
         FiltrarConf();
     }
 
+    /// <summary>
+    /// Le o worldserver.conf e mostra, em cada linha, o valor que está lá
+    /// agora.
+    ///
+    /// Sem isso a tela nascia toda em branco e não havia como saber o que já
+    /// tinha sido aplicado: fechar e reabrir a GUI apagava a única pista, que
+    /// era o que o usuário tinha acabado de digitar. O campo de digitar
+    /// continua vazio de propósito — em branco significa "não mexer nesta
+    /// chave", e preencher tudo faria o Aplicar reescrever o arquivo inteiro.
+    /// </summary>
+    private void LerValoresAtuais()
+    {
+        var server = Session.Current.Loaded?.ServerDir;
+        var caminho = string.IsNullOrWhiteSpace(server)
+            ? null
+            : System.IO.Path.Combine(server, "configs", "worldserver.conf");
+
+        IReadOnlyDictionary<string, string> atuais =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (caminho is not null && System.IO.File.Exists(caminho))
+        {
+            try { atuais = ConfFile.ReadValues(caminho); }
+            catch (Exception ex) { Saida.Append($"[aviso] não consegui ler o worldserver.conf: {ex.Message}"); }
+        }
+
+        foreach (var item in _ajustesConf)
+            item.Atual = atuais.TryGetValue(item.Setting.Key, out var v) ? v.Trim() : null;
+
+        // O ItemsControl recebe uma lista nova a cada filtro, entao nao ha
+        // binding vivo para notificar - refazer a lista e o que redesenha.
+        FiltrarConf();
+    }
+
     private void FiltroConf_Changed(object sender, RoutedEventArgs e) => FiltrarConf();
 
     private void FiltrarConf()
@@ -269,6 +313,11 @@ public partial class TuningView : UserControl
         if (r != MessageBoxResult.Yes) return;
 
         await RodarAsync("tune-config.ps1", new[] { "-Setting", arg, "-Apply" });
+
+        // Reler do arquivo, nao assumir que gravou: se o script recusou uma
+        // chave, a tela tem que mostrar o valor que sobrou de verdade.
+        foreach (var item in _ajustesConf) item.Valor = string.Empty;
+        LerValoresAtuais();
     }
 
     private async void ResetConf_Click(object sender, RoutedEventArgs e)
@@ -281,7 +330,7 @@ public partial class TuningView : UserControl
 
         await RodarAsync("tune-config.ps1", new[] { "-Reset", "-Apply" });
         foreach (var item in _ajustesConf) item.Valor = string.Empty;
-        FiltrarConf();
+        LerValoresAtuais();
     }
 
     private async void ListarConf_Click(object sender, RoutedEventArgs e)
@@ -301,9 +350,20 @@ public sealed class AjusteConfItem
     /// <summary>O que o usuario digitou. Vazio = nao mexer nesta chave.</summary>
     public string Valor { get; set; } = string.Empty;
 
+    /// <summary>
+    /// O que esta no worldserver.conf agora. Null quando o arquivo nao existe
+    /// ou nao traz a chave.
+    /// </summary>
+    public string? Atual { get; set; }
+
     public string Rotulo => Setting.Label;
-    public string Detalhe => $"{Setting.Category}  ·  {Setting.Key}  ·  padrão {Setting.Default}";
     public FieldHelpEntry Ajuda => Setting.Help;
+
+    public string Detalhe => ConfigStatus.Describe(Setting, Atual);
+
+    /// <summary>Destaque para o que ja foi mexido, para achar de relance.</summary>
+    public Brush CorDetalhe => (Brush)Application.Current.Resources[
+        ConfigStatus.IsChanged(Setting, Atual) ? "Accent" : "TextDim"];
 
     public string TextoBusca => $"{Setting.Label} {Setting.Category} {Setting.Key} {Setting.Description}";
 }

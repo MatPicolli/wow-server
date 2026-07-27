@@ -42,19 +42,31 @@
                     <DockPanel Grid.Column="0">
                         <TextBlock DockPanel.Dock="Top" Text="Categoria" FontSize="11"
                                    Foreground="{StaticResource TextDim}" />
-                        <ComboBox x:Name="ComboClasse" SelectionChanged="Classe_Changed" />
+                        <ComboBox x:Name="ComboClasse" SelectionChanged="Classe_Changed">
+                            <ComboBox.Resources>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextoEmCombo}" />
+                            </ComboBox.Resources>
+                        </ComboBox>
                     </DockPanel>
 
                     <DockPanel Grid.Column="2">
                         <TextBlock DockPanel.Dock="Top" Text="Tipo" FontSize="11"
                                    Foreground="{StaticResource TextDim}" />
-                        <ComboBox x:Name="ComboSubclasse" />
+                        <ComboBox x:Name="ComboSubclasse">
+                            <ComboBox.Resources>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextoEmCombo}" />
+                            </ComboBox.Resources>
+                        </ComboBox>
                     </DockPanel>
 
                     <DockPanel Grid.Column="4">
                         <TextBlock DockPanel.Dock="Top" Text="Qualidade" FontSize="11"
                                    Foreground="{StaticResource TextDim}" />
-                        <ComboBox x:Name="ComboQualidade" />
+                        <ComboBox x:Name="ComboQualidade">
+                            <ComboBox.Resources>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextoEmCombo}" />
+                            </ComboBox.Resources>
+                        </ComboBox>
                     </DockPanel>
 
                     <DockPanel Grid.Column="6">

@@ -50,12 +50,14 @@ Write-Info "porta:    $Port"
 $safeName = $Name -replace "'", "''"
 $safeAddr = $Address -replace "'", "''"
 
+# INSERT ... ON DUPLICATE KEY, nao UPDATE: com a tabela vazia o UPDATE acerta
+# zero linhas e nao devolve erro nenhum. O script dizia "realm configurado", a
+# tabela continuava vazia, e o authserver subia e se desligava sozinho com
+# "No valid realms specified." - mensagem que nao tem nada a ver com endereco.
 $sql = @"
-UPDATE realmlist
-   SET name = '$safeName',
-       address = '$safeAddr',
-       port = $Port
- WHERE id = 1;
+INSERT INTO realmlist (id, name, address, localAddress, localSubnetMask, port)
+VALUES (1, '$safeName', '$safeAddr', '127.0.0.1', '255.255.255.0', $Port)
+ON DUPLICATE KEY UPDATE name = VALUES(name), address = VALUES(address), port = VALUES(port);
 "@
 
 Invoke-MySql -Settings $settings -User $m.User -Password $m.Password -Database $m.AuthDb -Sql $sql | Out-Null

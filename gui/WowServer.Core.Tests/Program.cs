@@ -779,6 +779,219 @@ finally
     try { Directory.Delete(dbcDir, true); } catch { }
 }
 
+// ------------------------------------------------ arquivos .conf ---------
+Console.WriteLine("\n=== ConfFile: ler e editar .conf sem reescrever ===");
+
+// CRLF de proposito: e o que o Windows escreve, e um '$' de regex em modo
+// multilinha casaria antes do \r e nao acharia o fim da linha.
+var confTexto = string.Join("\r\n", new[]
+{
+    "# Este e o cabecalho do arquivo.",
+    "",
+    "#    Rate.XP.Kill",
+    "#        Description: Multiplicador de XP por abate.",
+    "#        Default:     1",
+    "",
+    "Rate.XP.Kill = 3",
+    "",
+    "#    PlayerbotsDatabaseInfo",
+    "#        Description: String de conexao.",
+    "",
+    "PlayerbotsDatabaseInfo = \"127.0.0.1;3306;acore;acore;acore_playerbots\"",
+    "",
+    "AhBot.Account = 0    # id da conta do bot",
+    "",
+});
+
+var confEntradas = ConfFile.Parse(confTexto);
+Check("acha as tres chaves", confEntradas.Count == 3, confEntradas.Count.ToString());
+Check("le o valor simples", confEntradas[0].Value == "3");
+Check("guarda o comentario que explica",
+      confEntradas[0].Comment.Contains("Multiplicador de XP"), confEntradas[0].Comment);
+Check("tira as aspas quando pedido",
+      confEntradas[1].Unquoted == "127.0.0.1;3306;acore;acore;acore_playerbots",
+      confEntradas[1].Unquoted);
+Check("comentario no fim da linha nao vira valor",
+      confEntradas[2].Value == "0", "[" + confEntradas[2].Value + "]");
+
+// Trocar um valor nao pode mexer em mais nada.
+var trocado = ConfFile.SetValue(confTexto, "Rate.XP.Kill", "5")!;
+Check("trocou o valor", ConfFile.Parse(trocado)[0].Value == "5");
+Check("preservou o CRLF", trocado.Contains("\r\n") && !trocado.Contains("\n\r\n\r"));
+Check("preservou os comentarios",
+      trocado.Contains("Description: Multiplicador de XP por abate."));
+Check("nao duplicou a chave",
+      ConfFile.Parse(trocado).Count(x => x.Key == "Rate.XP.Kill") == 1);
+Check("as outras chaves ficaram intactas",
+      ConfFile.Parse(trocado)[2].Value == "0");
+
+// O mesmo texto em LF puro tem que funcionar igual - literal escrito no Linux.
+var confLf = confTexto.Replace("\r\n", "\n");
+Check("funciona em LF tambem", ConfFile.Parse(ConfFile.SetValue(confLf, "Rate.XP.Kill", "7")!)[0].Value == "7");
+
+Check("mantem as aspas de quem tinha",
+      ConfFile.SetValue(confTexto, "PlayerbotsDatabaseInfo", "1.2.3.4;3306;u;p;d")!
+              .Contains("\"1.2.3.4;3306;u;p;d\""));
+Check("preserva o comentario de fim de linha",
+      ConfFile.SetValue(confTexto, "AhBot.Account", "102")!.Contains("# id da conta do bot"));
+Check("chave que nao existe devolve null",
+      ConfFile.SetValue(confTexto, "NaoExiste", "1") is null);
+
+var multi = ConfFile.SetValues(confTexto, new[]
+{
+    new KeyValuePair<string, string>("Rate.XP.Kill", "10"),
+    new KeyValuePair<string, string>("Inventada", "1"),
+}, out var confFaltando);
+Check("aplica varias de uma vez", ConfFile.Parse(multi)[0].Value == "10");
+Check("relata a chave que nao existia",
+      confFaltando.Count == 1 && confFaltando[0] == "Inventada");
+
+// Ler de disco, gravar sem BOM - um BOM quebra o parser do AzerothCore.
+var confDir = Path.Combine(Path.GetTempPath(), "conf-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(confDir);
+try
+{
+    var alvo = Path.Combine(confDir, "mod_teste.conf");
+    ConfFile.Save(alvo, confTexto);
+
+    var bytes = File.ReadAllBytes(alvo);
+    Check("gravou sem BOM", !(bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF));
+
+    var lidos = ConfFile.ReadValues(alvo);
+    Check("le do disco", lidos["Rate.XP.Kill"] == "3");
+    Check("busca ignora maiusculas", lidos["rate.xp.kill"] == "3");
+    Check("arquivo inexistente devolve vazio, nao estoura",
+          ConfFile.ReadValues(Path.Combine(confDir, "nao-existe.conf")).Count == 0);
+
+    var copia = ConfFile.Backup(alvo);
+    Check("fez copia antes de gravar", File.Exists(copia));
+    Check("a copia tem o conteudo original", File.ReadAllText(copia).Contains("Rate.XP.Kill = 3"));
+
+    // --- descoberta dos .conf de cada modulo ---
+    Console.WriteLine("\n=== ModuleConfigs: ligar modulo ao .conf ===");
+
+    var modDir = Path.Combine(confDir, "server", "configs", "modules");
+    Directory.CreateDirectory(modDir);
+    foreach (var nome in new[]
+             {
+                 "mod_ahbot.conf", "playerbots.conf", "playerbots_rpg.conf",
+                 "mod_ale.conf", "mod_solocraft.conf", "orfao.conf",
+                 "mod_ahbot.conf.dist",
+             })
+    {
+        File.WriteAllText(Path.Combine(modDir, nome), "Chave = 1\n");
+    }
+
+    Check("normaliza tirando o prefixo mod", ModuleConfigs.Normalize("mod-ah-bot") == "ahbot");
+    Check("normaliza o nome do arquivo", ModuleConfigs.Normalize("mod_ahbot") == "ahbot");
+    Check("nome sem prefixo fica igual", ModuleConfigs.Normalize("playerbots") == "playerbots");
+    Check("liga mod-ah-bot a mod_ahbot.conf", ModuleConfigs.Matches("mod-ah-bot", "mod_ahbot.conf"));
+    Check("liga mod-playerbots a playerbots.conf", ModuleConfigs.Matches("mod-playerbots", "playerbots.conf"));
+    Check("liga o .conf com sufixo", ModuleConfigs.Matches("mod-playerbots", "playerbots_rpg.conf"));
+    Check("nao liga modulos diferentes", !ModuleConfigs.Matches("mod-ah-bot", "mod_solocraft.conf"));
+
+    var instalados = new[] { "mod-ah-bot", "mod-playerbots", "mod-ale", "mod-solocraft" };
+    var achadosConf = ModuleConfigs.Discover(Path.Combine(confDir, "server"), instalados);
+
+    Check("ignora o .conf.dist, que e so modelo",
+          achadosConf.All(c => !c.FileName.EndsWith(".dist", StringComparison.Ordinal)),
+          string.Join(",", achadosConf.Select(c => c.FileName)));
+    Check("achou os seis .conf", achadosConf.Count == 6, achadosConf.Count.ToString());
+    Check("o .conf sem dono fica sem dono",
+          achadosConf.Single(c => c.FileName == "orfao.conf").ModuleName == "");
+    Check("playerbots fica com os dois arquivos",
+          achadosConf.Count(c => c.ModuleName == "mod-playerbots") == 2);
+
+    var soDoAhbot = ModuleConfigs.ForModule(Path.Combine(confDir, "server"), "mod-ah-bot");
+    Check("ForModule traz so o do modulo pedido",
+          soDoAhbot.Count == 1 && soDoAhbot[0].FileName == "mod_ahbot.conf");
+    Check("modulo sem .conf devolve lista vazia",
+          ModuleConfigs.ForModule(Path.Combine(confDir, "server"), "mod-transmog").Count == 0);
+    Check("pasta inexistente devolve lista vazia",
+          ModuleConfigs.Discover(Path.Combine(confDir, "nada"), instalados).Count == 0);
+}
+finally
+{
+    try { Directory.Delete(confDir, true); } catch { }
+}
+
+// --------------------------------------------- valor atual do ajuste ------
+Console.WriteLine("\n=== ConfigStatus: mostrar o que esta no arquivo ===");
+
+var ajusteXp = ConfigTuning.Find("Rate.XP.Kill")!;
+
+Check("1 e 1.0 sao o mesmo valor", ConfigStatus.SameValue("1", "1.0"));
+Check("espacos nao contam", ConfigStatus.SameValue(" 3 ", "3"));
+Check("valores diferentes sao diferentes", !ConfigStatus.SameValue("3", "5"));
+Check("texto nao numerico compara como texto", ConfigStatus.SameValue("Console Server", "console server"));
+
+Check("igual ao padrao nao e mudanca", !ConfigStatus.IsChanged(ajusteXp, "1"));
+Check("1.0 tambem nao e mudanca", !ConfigStatus.IsChanged(ajusteXp, "1.0"));
+Check("valor diferente e mudanca", ConfigStatus.IsChanged(ajusteXp, "3"));
+Check("sem valor lido nao afirma mudanca", !ConfigStatus.IsChanged(ajusteXp, null));
+
+Check("sem arquivo lido diz que nao leu",
+      ConfigStatus.Describe(ajusteXp, null).Contains("não li o arquivo"));
+Check("mostra o valor de agora",
+      ConfigStatus.Describe(ajusteXp, "3").Contains("agora 3"));
+Check("diz quando o valor e o padrao",
+      ConfigStatus.Describe(ajusteXp, "1").Contains("é o padrão"));
+Check("mostra a chave para procurar no arquivo",
+      ConfigStatus.Describe(ajusteXp, "3").Contains("Rate.XP.Kill"));
+
+// ------------------------------------------- pasta com nome antigo --------
+Console.WriteLine("\n=== RenamedModules: mod-eluna precisa virar mod-ale ===");
+
+var renDir = Path.Combine(Path.GetTempPath(), "ren-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(renDir);
+try
+{
+    Check("pasta inexistente nao acusa nada",
+          RenamedModules.Detect(Path.Combine(renDir, "nada")).Count == 0);
+
+    Directory.CreateDirectory(Path.Combine(renDir, "mod-ah-bot"));
+    Check("instalacao limpa nao acusa nada", RenamedModules.Detect(renDir).Count == 0);
+
+    Directory.CreateDirectory(Path.Combine(renDir, "mod-eluna"));
+    var ren = RenamedModules.Detect(renDir);
+    Check("acha a pasta com nome antigo", ren.Count == 1);
+    Check("aponta o nome certo", ren[0].Correct == "mod-ale");
+    Check("sem conflito quando so a antiga existe", !ren[0].Conflict);
+    Check("explica sem falar em conflito", ren[0].Explanation.Contains("lua.h"));
+
+    Directory.CreateDirectory(Path.Combine(renDir, "mod-ale"));
+    var ren2 = RenamedModules.Detect(renDir);
+    Check("acusa conflito com as duas", ren2[0].Conflict);
+    Check("no conflito manda remover", ren2[0].Explanation.Contains("remova"));
+
+    Directory.Delete(Path.Combine(renDir, "mod-eluna"));
+    Check("so o nome certo nao acusa nada", RenamedModules.Detect(renDir).Count == 0);
+}
+finally
+{
+    try { Directory.Delete(renDir, true); } catch { }
+}
+
+// ------------------------------------ janela de console para script ------
+Console.WriteLine("\n=== ConsoleScriptCommand ===");
+
+var cmd = ConsoleScriptCommand.Build(@"C:\repo\scripts\start-mysql.ps1", new[] { "-Automatic" });
+Check("chama o script", cmd.StartsWith(@"& 'C:\repo\scripts\start-mysql.ps1' -Automatic"), cmd);
+Check("guarda o exit code antes de qualquer outra coisa",
+      cmd.Contains("$c = $LASTEXITCODE"));
+// -NoExit devolveria o codigo de fechar a janela, nao o do script: uma senha
+// errada voltaria como sucesso.
+Check("nao usa -NoExit", !cmd.Contains("-NoExit"));
+Check("espera o Enter antes de fechar", cmd.Contains("Read-Host"));
+Check("devolve o codigo do script no fim", cmd.TrimEnd().EndsWith("exit $c"));
+Check("script sem argumento tambem funciona",
+      ConsoleScriptCommand.Build(@"C:\r\s.ps1").StartsWith(@"& 'C:\r\s.ps1'; "));
+Check("apostrofo no caminho e escapado",
+      ConsoleScriptCommand.Build(@"C:\Mateus's\s.ps1").Contains(@"C:\Mateus''s\s.ps1"));
+Check("valor com espaco vai entre aspas",
+      ConsoleScriptCommand.Build(@"C:\s.ps1", new[] { "-Name", "Meu Servidor" })
+          .Contains("-Name 'Meu Servidor'"));
+
 // cartas de correio
 Check("nenhum item, nenhuma carta", MailPlan.Build(Array.Empty<int>(), "Mateus").Count == 0);
 Check("12 itens cabem numa carta", MailPlan.Build(Enumerable.Range(1, 12).ToList(), "Mateus").Count == 1);
@@ -909,6 +1122,98 @@ else
         .Where(k => !usadas.Any(u => u.Chave == k))
         .ToList();
     Check("nenhuma ajuda ficou sem campo que a use", orfas.Count == 0, string.Join(", ", orfas));
+
+    // O projeto WPF nao compila neste ambiente, entao tres erros que o
+    // compilador pegaria sao conferidos aqui: XAML que nao e XML valido,
+    // handler citado num evento e que nao existe no code-behind, e
+    // StaticResource que nao esta definido em lugar nenhum. Qualquer um dos
+    // tres so apareceria como a janela morrendo ao abrir, na maquina do
+    // usuario.
+    foreach (var arquivo in xamls)
+    {
+        var nome = Path.GetFileName(arquivo);
+        var xmlValido = true;
+        try { System.Xml.Linq.XDocument.Load(arquivo); } catch { xmlValido = false; }
+        Check($"{nome} e XML valido", xmlValido);
+    }
+
+    var eventos = new System.Text.RegularExpressions.Regex(
+        @"\b(?:Click|SelectionChanged|TextChanged|Checked|Unchecked|MouseEnter|KeyDown|RequestNavigate|IsVisibleChanged)=""([^""]+)""");
+
+    foreach (var arquivo in xamls)
+    {
+        var codigo = arquivo + ".cs";
+        if (!File.Exists(codigo)) continue;
+
+        var corpo = File.ReadAllText(codigo);
+        foreach (System.Text.RegularExpressions.Match m in eventos.Matches(File.ReadAllText(arquivo)))
+        {
+            var handler = m.Groups[1].Value;
+            Check($"handler {handler} existe em {Path.GetFileName(codigo)}",
+                  System.Text.RegularExpressions.Regex.IsMatch(
+                      corpo, @"\bvoid\s+" + System.Text.RegularExpressions.Regex.Escape(handler) + @"\s*\("));
+        }
+    }
+
+    var appXaml = Path.Combine(repo, "WowServer.Gui", "App.xaml");
+    var chavesGlobais = new HashSet<string>(
+        System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(appXaml), @"x:Key=""([^""]+)""")
+            .Select(m => m.Groups[1].Value));
+
+    var recursosFaltando = new List<string>();
+    foreach (var arquivo in xamls)
+    {
+        var texto = File.ReadAllText(arquivo);
+        var locais = new HashSet<string>(
+            System.Text.RegularExpressions.Regex.Matches(texto, @"x:Key=""([^""]+)""")
+                .Select(m => m.Groups[1].Value));
+
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(texto, @"\{StaticResource ([^}]+)\}"))
+        {
+            var chave = m.Groups[1].Value.Trim();
+            if (chave.StartsWith("{", StringComparison.Ordinal)) continue;  // {x:Type ...}
+            if (!chavesGlobais.Contains(chave) && !locais.Contains(chave))
+                recursosFaltando.Add($"{Path.GetFileName(arquivo)}: {chave}");
+        }
+    }
+    Check("todo StaticResource usado existe", recursosFaltando.Count == 0,
+          string.Join(", ", recursosFaltando));
+
+    // Script que ninguem alcanca pela interface e uma funcionalidade que so
+    // existe para quem abre o PowerShell. Este teste falha de proposito quando
+    // um script novo entra sem botao - ou o botao aparece, ou o script entra na
+    // lista de excecoes abaixo, com o motivo escrito.
+    var pastaScripts = Path.Combine(Directory.GetParent(repo)!.FullName, "scripts");
+    if (Directory.Exists(pastaScripts))
+    {
+        // A interface faz estes tres por conta propria, com o console ao vivo:
+        // subir e desligar o servidor passam pelo ServerController, e a
+        // instalacao completa e a lista de etapas do InstallPlan.
+        var semBotaoDeProposito = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "setup-all.ps1", "start-server.ps1", "stop-server.ps1",
+        };
+
+        var citados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var arquivo in Directory.GetFiles(repo, "*.cs", SearchOption.AllDirectories))
+        {
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(
+                         File.ReadAllText(arquivo), @"""([A-Za-z0-9._-]+\.ps1)"""))
+            {
+                citados.Add(m.Groups[1].Value);
+            }
+        }
+
+        var semBotao = Directory.GetFiles(pastaScripts, "*.ps1")
+            .Select(Path.GetFileName)
+            .Where(n => n is not null && !citados.Contains(n) && !semBotaoDeProposito.Contains(n))
+            .ToList();
+
+        Check("todo script tem como ser usado pela interface",
+              semBotao.Count == 0, string.Join(", ", semBotao));
+    }
 }
 
 

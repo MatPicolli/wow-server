@@ -14,6 +14,13 @@ public partial class SettingsView : UserControl
     {
         InitializeComponent();
         TxtRepo.Text = Session.Current.RepoRoot;
+        SaidaReparo.Title = "Reparos e backup";
+
+        // Sem isto o backup e os reparos rodavam mudos: a tela dizia so
+        // "terminou com codigo N" e o motivo ficava invisivel.
+        _runner.Output += linha =>
+            Dispatcher.Invoke(() => SaidaReparo.Append(linha.Text, linha.Kind));
+
         Loaded += async (_, _) => await CarregarAsync();
     }
 
@@ -143,5 +150,68 @@ public partial class SettingsView : UserControl
         {
             TxtStatus.Text = ex.Message;
         }
+    }
+
+    /// <summary>
+    /// Tira chaves repetidas do settings.psd1.
+    ///
+    /// Uma chave duplicada faz o Import-PowerShellDataFile recusar o arquivo
+    /// INTEIRO, e aí nenhum script roda — inclusive este, se ele dependesse de
+    /// ler as configurações. Por isso o reparo existe separado.
+    /// </summary>
+    private async void RepararSettings_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_runner.ScriptExists("repair-settings.ps1"))
+        {
+            SaidaReparo.Append("[erro] scripts\\repair-settings.ps1 não encontrado", OutputKind.Error);
+            return;
+        }
+
+        // Este script grava por padrao e so simula com -WhatIf - ao contrario
+        // dos outros, que preveem por padrao e gravam com -Apply. A previa aqui
+        // e o -WhatIf, nao a chamada sem argumento.
+        SaidaReparo.Append("==> conferindo o settings.psd1");
+        var previa = await _runner.RunAsync("repair-settings.ps1", new[] { "-WhatIf" });
+        if (previa != 0) return;
+
+        var r = MessageBox.Show(
+            "Gravar o arquivo corrigido?\n\n"
+            + "O console mostra o que seria removido. Uma cópia do original é guardada antes.",
+            "Consertar o settings.psd1", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (r != MessageBoxResult.Yes) return;
+
+        await _runner.RunAsync("repair-settings.ps1");
+        await CarregarAsync();
+    }
+
+    /// <summary>
+    /// Apaga o que da para reconstruir e preserva a pasta Data, que leva horas
+    /// para extrair. O script mostra tudo antes; aqui so se confirma.
+    /// </summary>
+    private async void Reset_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_runner.ScriptExists("reset-server.ps1"))
+        {
+            SaidaReparo.Append("[erro] scripts\\reset-server.ps1 não encontrado", OutputKind.Error);
+            return;
+        }
+
+        SaidaReparo.Append("==> o que seria apagado");
+        var previa = await _runner.RunAsync("reset-server.ps1");
+        if (previa != 0)
+        {
+            MessageBox.Show("O script recusou — o motivo está no console.", "Não dá para recomeçar assim");
+            return;
+        }
+
+        var r = MessageBox.Show(
+            "Apagar o código, a compilação e a instalação do servidor?\n\n"
+            + "A pasta Data (dbc, maps, vmaps, mmaps) é preservada — é ela que leva horas.\n\n"
+            + "O banco de dados NÃO é apagado: seus personagens continuam lá.\n\n"
+            + "O console ao lado lista exatamente o que será apagado.",
+            "Recomeçar do zero", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (r != MessageBoxResult.Yes) return;
+
+        await _runner.RunAsync("reset-server.ps1", new[] { "-Apply" });
     }
 }

@@ -1,0 +1,64 @@
+<Window x:Class="WowServer.Gui.Views.ModuleConfigWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configurações do módulo" Height="640" Width="820"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Bg}">
+    <DockPanel Margin="18">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TxtTitulo" Style="{StaticResource Titulo}" Text="Configurações" />
+            <TextBlock x:Name="TxtCaminho" Style="{StaticResource Subtitulo}" />
+
+            <DockPanel x:Name="LinhaArquivo" Margin="0,0,0,10" Visibility="Collapsed">
+                <TextBlock DockPanel.Dock="Left" Text="Arquivo" VerticalAlignment="Center"
+                           Margin="0,0,8,0" FontSize="12" Foreground="{StaticResource TextDim}" />
+                <ComboBox x:Name="ComboArquivo" SelectionChanged="Arquivo_Changed">
+                    <ComboBox.Resources>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextoEmCombo}" />
+                    </ComboBox.Resources>
+                </ComboBox>
+            </DockPanel>
+
+            <DockPanel Margin="0,0,0,10">
+                <TextBlock DockPanel.Dock="Left" Text="Filtrar" VerticalAlignment="Center"
+                           Margin="0,0,8,0" FontSize="12" Foreground="{StaticResource TextDim}" />
+                <TextBox x:Name="CaixaFiltro" TextChanged="Filtro_Changed" />
+            </DockPanel>
+        </StackPanel>
+
+        <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <DockPanel>
+                <TextBlock x:Name="TxtRodape" DockPanel.Dock="Left" VerticalAlignment="Center"
+                           FontSize="11" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextDim}" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Fechar" Click="Fechar_Click" />
+                    <Button Content="Salvar" Style="{StaticResource BotaoPrincipal}" Click="Salvar_Click" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="Lista">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource BgPanel}" BorderBrush="{StaticResource Border}"
+                                BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,6">
+                            <DockPanel>
+                                <TextBox DockPanel.Dock="Right" Width="190" Margin="10,0,0,0"
+                                         VerticalAlignment="Top" FontFamily="Consolas" FontSize="12"
+                                         Text="{Binding Valor, UpdateSourceTrigger=PropertyChanged}" />
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Chave}" FontSize="13" FontFamily="Consolas"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Explicacao}" FontSize="11" TextWrapping="Wrap"
+                                               Margin="0,3,0,0" Foreground="{StaticResource TextDim}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</Window>
