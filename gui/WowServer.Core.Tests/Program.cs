@@ -685,6 +685,100 @@ Check("item sem dano nao mostra dps", !balaoSimples.Any(l => l.Text.Contains("po
 Check("item sem atributo nao lista atributos", simples.Stats.Count == 0);
 Check("item sem vinculo nao mostra vinculo", !balaoSimples.Any(l => l.Text.StartsWith("Vincula")));
 
+// ------------------------------------------- item customizado no client ---
+Console.WriteLine("\n=== ClientItemCheck: item que o client nao mostra ===");
+
+// Item feito a mao: entry fora da faixa do jogo e displayid da era ICC.
+static ItemRow Customizado(int entry, int displayId) => new(
+    entry, "Elmo de Herança", 4, 1, 7, 1, 1, 1, 1, 100,
+    0, 0, 0, 0, 0, 1, Array.Empty<(int, int)>(), "", displayId);
+
+var idsDoClient = new HashSet<int> { 1, 2, 42, 12345 };
+
+var ok = ClientItemCheck.Check(Customizado(12345, 31657), idsDoClient);
+Check("item normal nao acusa nada", ok.Count == 0,
+      string.Join(" | ", ok.Select(x => x.Summary)));
+
+var alto = ClientItemCheck.Check(Customizado(12345, 64190), idsDoClient);
+Check("displayid da era ICC e acusado",
+      alto.Any(x => x.Problem == ClientItemProblem.DisplayIdAltoDemais));
+Check("limite e 32000 exclusivo",
+      ClientItemCheck.Check(Customizado(12345, 32000), idsDoClient)
+          .Any(x => x.Problem == ClientItemProblem.DisplayIdAltoDemais));
+Check("logo abaixo do limite passa",
+      ClientItemCheck.Check(Customizado(12345, 31999), idsDoClient).Count == 0);
+
+var semDbc = ClientItemCheck.Check(Customizado(700000, 31657), idsDoClient);
+Check("entry fora do Item.dbc e acusada",
+      semDbc.Any(x => x.Problem == ClientItemProblem.ForaDoItemDbc));
+
+Check("os dois problemas juntos saem juntos",
+      ClientItemCheck.Check(Customizado(700000, 64190), idsDoClient).Count == 2);
+
+// Sem o Item.dbc extraido nao da para afirmar ausencia. Acusar todo item
+// seria pior que nao checar - e todo item do jogo cairia no aviso.
+Check("sem Item.dbc nao acusa ausencia",
+      !ClientItemCheck.Check(Customizado(700000, 31657), null)
+          .Any(x => x.Problem == ClientItemProblem.ForaDoItemDbc));
+Check("sem Item.dbc o displayid ainda e conferido",
+      ClientItemCheck.Check(Customizado(700000, 64190), null)
+          .Any(x => x.Problem == ClientItemProblem.DisplayIdAltoDemais));
+
+Check("aviso curto some quando esta tudo bem",
+      ClientItemCheck.ShortWarning(Customizado(12345, 31657), idsDoClient) is null);
+Check("aviso curto aparece quando ha problema",
+      ClientItemCheck.ShortWarning(Customizado(700000, 64190), idsDoClient)?.Contains("cliente") == true);
+
+// o balao carrega o aviso, e sem a lista continua igual ao que sempre foi
+var balaoQuebrado = ItemTooltip.Build(Customizado(700000, 64190), idsDoClient);
+Check("balao mostra o aviso do client",
+      balaoQuebrado.Any(l => l.Text.StartsWith("[cliente]")));
+Check("aviso do client sai em vermelho",
+      balaoQuebrado.Where(l => l.Text.StartsWith("[cliente]")).All(l => l.Color == ItemTooltip.Vermelho));
+Check("aviso vai depois do ID, no fim",
+      balaoQuebrado[^1].Text.StartsWith("[cliente]"));
+Check("balao sem a lista nao ganha aviso de ausencia",
+      !ItemTooltip.Build(Customizado(700000, 31657)).Any(l => l.Text.StartsWith("[cliente]")));
+
+// Item.dbc de verdade, escrito byte a byte no formato do 3.3.5a e lido de
+// volta pelo nosso proprio leitor de DBC.
+var dbcDir = Path.Combine(Path.GetTempPath(), "itemdbc-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(Path.Combine(dbcDir, "dbc"));
+try
+{
+    Check("sem o arquivo devolve null, nao vazio",
+          ClientItemCheck.ReadClientItemIds(dbcDir) is null);
+
+    // 8 campos de 4 bytes; campo 0 = ID.
+    var entradas = new[] { 25, 56806, 700000 };
+    using (var ms = new MemoryStream())
+    using (var w = new BinaryWriter(ms))
+    {
+        w.Write(new[] { (byte)'W', (byte)'D', (byte)'B', (byte)'C' });
+        w.Write((uint)entradas.Length);   // recordCount
+        w.Write((uint)8);                 // fieldCount
+        w.Write((uint)32);                // recordSize = 8 * 4
+        w.Write((uint)1);                 // stringBlockSize
+        foreach (var id in entradas)
+        {
+            w.Write((uint)id);
+            for (var c = 1; c < 8; c++) w.Write((uint)0);
+        }
+        w.Write((byte)0);                 // bloco de strings
+        File.WriteAllBytes(Path.Combine(dbcDir, "dbc", "Item.dbc"), ms.ToArray());
+    }
+
+    var lidos = ClientItemCheck.ReadClientItemIds(dbcDir);
+    Check("le as entries do Item.dbc", lidos is not null && lidos.Count == 3);
+    Check("le o primeiro id", lidos!.Contains(25));
+    Check("le o ultimo id", lidos.Contains(700000));
+    Check("nao inventa id", !lidos.Contains(26));
+}
+finally
+{
+    try { Directory.Delete(dbcDir, true); } catch { }
+}
+
 // cartas de correio
 Check("nenhum item, nenhuma carta", MailPlan.Build(Array.Empty<int>(), "Mateus").Count == 0);
 Check("12 itens cabem numa carta", MailPlan.Build(Enumerable.Range(1, 12).ToList(), "Mateus").Count == 1);

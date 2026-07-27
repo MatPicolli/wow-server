@@ -405,6 +405,18 @@ public static class ConfigTuning
                 new HelpExample("5", "quase sempre com bônus de descanso disponível"),
             }),
 
+        new ConfigSetting("NoResetTalentsCost", "Reset de talentos de graça", ConvenienciaCategoria, "0",
+            ConfigKind.Inteiro,
+            "Com 1, redistribuir talentos não custa nada e não encarece a cada vez "
+            + "(o original vai de 1 ouro para 5, 10, e assim por diante). Continua "
+            + "sendo preciso falar com um treinador de classe — isto zera só o preço.",
+            new[]
+            {
+                new HelpExample("0", "o original — a taxa sobe a cada reset"),
+                new HelpExample("1", "trocar de build à vontade, sem pensar no custo"),
+            })
+        { Min = 0, Max = 1 },
+
         new ConfigSetting("Rate.Corpse.Decay.Looted", "Sumiço do corpo saqueado", ConvenienciaCategoria, "0.5",
             ConfigKind.Multiplicador,
             "Multiplica quanto tempo o corpo já saqueado continua no chão.",

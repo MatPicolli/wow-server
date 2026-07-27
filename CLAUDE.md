@@ -31,7 +31,7 @@ in that folder and wrote up what it changed;
 unedited. **None of those files are here** — they exist only on that machine,
 so nothing in this repository can rebuild them.
 
-Four things from it change how code gets written *here*:
+These change how code gets written *here*:
 
 - **The world database is on an older schema than `source/data/sql/base/`.**
   `creature` has `id`, not `id1/id2/id3`, and `creature_template` has lost
@@ -39,6 +39,23 @@ Four things from it change how code gets written *here*:
   `spell_school_immune_mask`. Anything generating SQL against those tables must
   be checked against a dump of the live database, never against the core's
   source tree — the mismatch surfaces as `ERROR 1054 Unknown column`.
+- **A custom item can pass every server-side check and still be broken in the
+  client**, in two ways that produce no error anywhere. `ClientItemCheck` now
+  encodes both, and the item tooltip shows them in red:
+  - `displayid` at or above ~32000 renders as `?`. The server's
+    `ItemDisplayInfo.dbc` reaches 68742, so validation there passes; the client
+    does not resolve those. The game's own heirlooms use 6337–31657.
+  - an entry missing from the **client's** `Item.dbc` has no bag icon, does not
+    equip on right-click and plays no equip sound — but the character panel
+    still draws it, because that path uses the displayid from the visible-equipment
+    packet and never consults `Item.dbc`. That asymmetry is what makes it look
+    intermittent.
+- **A module's own `.conf` cannot set `Logger.*`.** The log system is
+  initialised before "Loading Modules Configuration…", so those lines are read
+  and discarded, and the module's errors fall into `Logger.root` at level 2 and
+  vanish. They have to go in `worldserver.conf`. Note this collides with
+  `tune-config.ps1`, which by design refuses a key that isn't already in the
+  file — a new `Logger.<mod>` line has to be added by hand first.
 - **`mysqldump` on MySQL 8 needs `--no-tablespaces`** when it runs as the
   server's own user, which has no `PROCESS` privilege. `backup-db.ps1` passes it.
 - **`mod-ale` is confirmed on the live install**, which is the naming fix
@@ -47,6 +64,12 @@ Four things from it change how code gets written *here*:
   **INSTALL** target, not `worldserver` — otherwise a newly added module
   silently isn't there. Our pipeline doesn't have this problem: `06-deploy.ps1`
   copies the binaries and every `.conf.dist`, module configs included.
+
+Two things there are worth copying if anything here ever generates Lua or SQL
+for that server: ALE's hook 61 hands you the skill's **absolute** value, not the
+gain (multiplying it takes Mining from 150 to 450 — hook 62 is the one that
+fires after the skill-up), and third-party module SQL is routinely not
+idempotent, so it must be made re-runnable before it goes near the database.
 
 ## Commands
 

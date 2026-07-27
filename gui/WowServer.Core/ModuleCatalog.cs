@@ -113,7 +113,14 @@ public static class ModuleCatalog
                 + "vendedores. Crie no console do worldserver:\n\n"
                 + "    account create ahbot suasenha\n\n"
                 + "Entre com ela, crie um personagem, saia. Depois preencha o ID da "
-                + "conta e o GUID do personagem em configs\\modules\\mod_ahbot.conf.")
+                + "conta e o GUID do personagem em configs\\modules\\mod_ahbot.conf.\n\n"
+                + "Sem isso o módulo carrega e não faz nada — o sinal é a linha "
+                + "\"AHBot: Account id and player id missing from configuration\" no "
+                + "log, e não um erro de inicialização.\n\n"
+                + "Um personagem só atende as três casas de leilão, e raça, classe "
+                + "e facção dele não importam: o módulo só lê o guid da conta. E "
+                + "ligue também o comprador (EnableBuyer), senão num servidor de "
+                + "uma pessoa você nunca vende nada.")
         { Category = SozinhoCategoria },
 
         new CatalogModule(

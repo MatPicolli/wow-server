@@ -263,22 +263,48 @@ public partial class ItemsView : UserControl
         });
     }
 
+    /// <summary>Entries do Item.dbc do client, lidas uma vez só.</summary>
+    private HashSet<int>? _idsDoCliente;
+    private bool _idsDoClienteLidos;
+
+    /// <summary>
+    /// Devolve null quando o Item.dbc não foi extraído — e aí o balão sai sem a
+    /// checagem, em vez de acusar todo item de faltar no client.
+    /// </summary>
+    private HashSet<int>? IdsDoCliente()
+    {
+        if (_idsDoClienteLidos) return _idsDoCliente;
+        _idsDoClienteLidos = true;
+
+        try
+        {
+            _idsDoCliente = ClientItemCheck.ReadClientItemIds(
+                System.IO.Path.Combine(Session.Current.Loaded?.ServerDir ?? "", "Data"));
+        }
+        catch (Exception ex)
+        {
+            Saida.Append($"[aviso] não consegui ler o Item.dbc: {ex.Message}");
+            _idsDoCliente = null;
+        }
+
+        return _idsDoCliente;
+    }
+
     /// <summary>
     /// Desenha o balão de informações, no formato do jogo.
     ///
-    /// Não há ícone: os ícones são arquivos BLP dentro dos MPQ do client, e a
-    /// instalação extrai só dbc, maps, vmaps e mmaps — Interface\Icons não
-    /// entra. Mostrar o ícone exigiria ler MPQ e decodificar BLP, então no
-    /// lugar dele vai um quadrado na cor da qualidade.
+    /// Efeitos de magia ("Usar: ...") ficam de fora: o texto mora no Spell.dbc,
+    /// não no banco.
     ///
-    /// Efeitos de magia ("Usar: ...") também ficam de fora: o texto mora no
-    /// Spell.dbc, não no banco.
+    /// No fim entram os avisos de item customizado que o client não mostra
+    /// direito — não existe erro em log nenhum para esses, então este balão é o
+    /// único lugar onde eles podem aparecer.
     /// </summary>
     private void MostrarBalao(ItemRow item)
     {
         PainelBalao.Children.Clear();
 
-        foreach (var linha in ItemTooltip.Build(item))
+        foreach (var linha in ItemTooltip.Build(item, IdsDoCliente()))
         {
             PainelBalao.Children.Add(new TextBlock
             {

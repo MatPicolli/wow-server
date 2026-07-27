@@ -250,7 +250,16 @@ public static class ItemTooltip
     public const string Verde  = "#1EFF00";
     public const string Dourado = "#FFD100";
 
-    public static IReadOnlyList<TooltipLine> Build(ItemRow item)
+    /// <summary>Vermelho do aviso, o mesmo tom de "requisito nao atendido" do jogo.</summary>
+    public const string Vermelho = "#FF2020";
+
+    /// <param name="clientItemIds">
+    /// Entries do Item.dbc do cliente, de <see cref="ClientItemCheck.ReadClientItemIds"/>.
+    /// Passando <c>null</c> o balao sai como sempre saiu — e o que fazer quando
+    /// o arquivo nao foi extraido, porque acusar todo item de ausente seria pior
+    /// que nao checar.
+    /// </param>
+    public static IReadOnlyList<TooltipLine> Build(ItemRow item, HashSet<int>? clientItemIds = null)
     {
         var linhas = new List<TooltipLine>
         {
@@ -304,6 +313,13 @@ public static class ItemTooltip
         if (preco.Length > 0) linhas.Add(new($"Preço de venda: {preco}", Branco));
 
         linhas.Add(new($"ID {item.Entry}", Cinza));
+
+        // Item feito a mao passa pela validacao do servidor e mesmo assim sai
+        // quebrado no cliente - sem icone, sem equipar no botao direito, sem
+        // som. Como nao ha erro em log nenhum, o aviso tem que aparecer aqui.
+        foreach (var problema in ClientItemCheck.Check(item, clientItemIds))
+            linhas.Add(new("[cliente] " + problema.Summary, Vermelho));
+
         return linhas;
     }
 }
