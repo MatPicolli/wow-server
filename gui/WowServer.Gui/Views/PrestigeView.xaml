@@ -1,0 +1,124 @@
+<UserControl x:Class="WowServer.Gui.Views.PrestigeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:WowServer.Gui.Views">
+    <Grid Margin="24">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="14" />
+            <ColumnDefinition Width="400" />
+        </Grid.ColumnDefinitions>
+
+        <DockPanel Grid.Column="0">
+            <StackPanel DockPanel.Dock="Top">
+                <TextBlock Text="Prestígio" Style="{StaticResource Titulo}" />
+                <TextBlock Style="{StaticResource Subtitulo}"
+                           Text="Volta ao nível 1 de propósito em troca de um multiplicador permanente de experiência. Quem faz isso no nível máximo ganha a Bênção do Ápice. É escrito em Lua sobre o ALE, então não precisa recompilar o core." />
+
+                <!-- O mod apaga nivel, quests e conquistas e devolve o
+                     equipamento por correio SEM encantamento nem gema. Nao ha
+                     desfazer. Isso precisa estar na cara, nao no README. -->
+                <Border Background="#2A1D1D" BorderBrush="{StaticResource Err}"
+                        BorderThickness="1" CornerRadius="3" Padding="10,8" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Isto apaga progresso de personagem, e não tem desfazer"
+                                   FontWeight="SemiBold" FontSize="12"
+                                   Foreground="{StaticResource Err}" Margin="0,0,0,4" />
+                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource Err}"
+                                   Text="Quem prestigia perde nível, quests e conquistas, e recebe o equipamento de volta pelo correio — sem encantamentos, gemas nem propriedades aleatórias, porque a API de correio cria itens novos a partir do ID. O único jeito de voltar atrás é o backup do banco. Faça um antes de liberar isto, e teste com um personagem descartável." />
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <Button Content="Ver o que a instalação faria" Click="Previa_Click" />
+                    <Button Content="Instalar" Style="{StaticResource BotaoPrincipal}" Click="Instalar_Click" />
+                    <Button Content="Fazer backup do banco" Click="Backup_Click" />
+                    <Button Content="Desinstalar" Click="Desinstalar_Click"
+                            ToolTip="Remove os scripts Lua e o NPC. As tabelas ficam: elas guardam o prestígio já conquistado." />
+                </StackPanel>
+
+                <Border Background="{StaticResource BgPanel}" BorderBrush="{StaticResource Border}"
+                        BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,12">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,6">
+                            <TextBlock Text="Situação" FontWeight="SemiBold" FontSize="13" />
+                            <Button DockPanel.Dock="Right" Content="Reconferir" Padding="8,2" FontSize="11"
+                                    HorizontalAlignment="Right" Click="Reconferir_Click" />
+                        </DockPanel>
+                        <ItemsControl x:Name="ListaSituacao">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Texto}" Foreground="{Binding Cor}"
+                                               TextWrapping="Wrap" FontSize="11" Margin="0,0,0,3" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="Ajustes" Style="{StaticResource Titulo}" />
+                    <TextBlock Style="{StaticResource Subtitulo}"
+                               Text="Editam o 01_prestige_config.lua direto. A explicação de cada campo vem do próprio arquivo. Depois de salvar, reinicie o worldserver — ou mande 'reload eluna' no console, que recarrega os scripts sem derrubar o servidor." />
+
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock DockPanel.Dock="Left" Text="Filtrar" VerticalAlignment="Center"
+                                   Margin="0,0,4,0" Foreground="{StaticResource TextDim}" FontSize="12" />
+                        <v:HelpIcon DockPanel.Dock="Left" Chave="prest.filtro" Margin="0,0,8,0" />
+                        <TextBox x:Name="CaixaFiltro" TextChanged="Filtro_Changed" />
+                    </DockPanel>
+
+                    <ItemsControl x:Name="ListaAjustes">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource BgPanel}" BorderBrush="{StaticResource Border}"
+                                        BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,6">
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Right" Width="120" Margin="8,0,0,0"
+                                                 VerticalAlignment="Top" FontFamily="Consolas" FontSize="12"
+                                                 Text="{Binding Valor, UpdateSourceTrigger=PropertyChanged}" />
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Rotulo}" FontSize="13" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Detalhe}" FontSize="10" TextWrapping="Wrap"
+                                                       Foreground="{StaticResource TextDim}" Margin="0,2,0,0" />
+                                            <TextBlock Text="{Binding Explicacao}" FontSize="11" TextWrapping="Wrap"
+                                                       Foreground="{StaticResource TextDim}" Margin="0,4,0,0" />
+                                            <TextBlock Text="{Binding Aviso}" FontSize="11" TextWrapping="Wrap"
+                                                       Foreground="{StaticResource Warn}" Margin="0,4,0,0"
+                                                       Visibility="{Binding VisibilidadeAviso}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,24">
+                        <Button Content="Salvar os ajustes" Style="{StaticResource BotaoPrincipal}"
+                                Click="Salvar_Click" />
+                        <Button Content="Recarregar do arquivo" Click="Reconferir_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+
+        <DockPanel Grid.Column="2">
+            <Border DockPanel.Dock="Top" Background="{StaticResource BgPanel}"
+                    BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="4"
+                    Padding="12" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="Curva de experiência" FontWeight="SemiBold" FontSize="13"
+                               Margin="0,0,0,6" />
+                    <TextBlock x:Name="TxtCurva" FontFamily="Consolas" FontSize="11"
+                               TextWrapping="Wrap" Foreground="{StaticResource TextDim}" />
+                    <TextBlock x:Name="TxtAvisoCurva" FontSize="11" TextWrapping="Wrap"
+                               Foreground="{StaticResource Warn}" Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
+
+            <v:ConsolePane x:Name="Saida" />
+        </DockPanel>
+    </Grid>
+</UserControl>

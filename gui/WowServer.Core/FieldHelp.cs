@@ -345,6 +345,17 @@ public static class FieldHelp
                 new HelpExample("Rate.MoveSpeed", "dá para procurar pela chave direto"),
             }),
 
+        // -------------------------------------------------------- prestigio
+        new FieldHelpEntry("prest.filtro", "Filtrar ajustes do prestígio",
+            "Procura por nome do ajuste, pela chave do arquivo ou pela explicação. "
+            + "Deixe vazio para ver todos.",
+            new[]
+            {
+                new HelpExample("xp", "os ajustes do multiplicador de experiência"),
+                new HelpExample("correio", "o que envolve as cartas com o equipamento"),
+                new HelpExample("MAX_PRESTIGE", "a chave exata, como está no arquivo"),
+            }),
+
         // ------------------------------------------------------ criar itens
         new FieldHelpEntry("novo.nome", "Nome do item novo",
             "Como o item aparece no jogo. Vai para a coluna 'name', que aceita até "

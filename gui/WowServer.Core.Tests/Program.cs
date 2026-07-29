@@ -779,6 +779,225 @@ finally
     try { Directory.Delete(dbcDir, true); } catch { }
 }
 
+// ---------------------------------------------------- config em Lua ------
+Console.WriteLine("\n=== LuaConfig: editar 01_prestige_config.lua ===");
+
+var luaTexto = string.Join("\r\n", new[]
+{
+    "--[[ cabecalho de bloco",
+    "     nao explica chave nenhuma ]]",
+    "",
+    "Prestige = Prestige or {}",
+    "",
+    "Prestige.Config = {",
+    "",
+    "    -- ---------------------------------------------------------------",
+    "    -- Elegibilidade",
+    "    -- ---------------------------------------------------------------",
+    "    MIN_LEVEL      = 30,",
+    "    MAX_LEVEL      = 79,",
+    "",
+    "    -- Precisa ser true para o bonus de nivel maximo existir.",
+    "    ALLOW_MAX_LEVEL = true,",
+    "",
+    "    MAX_PRESTIGE   = 10,   -- teto. 0 = sem limite",
+    "    XP_STEP        = 0.4,",
+    "",
+    "    MAIL_SUBJECT   = \"Pertences do Prestigio\",",
+    "",
+    "    DEBUG = true,",
+    "}",
+    "",
+    "local naoEhConfig = 5",
+    "",
+});
+
+var luaChaves = LuaConfig.Parse(luaTexto);
+Check("acha as chaves da tabela", luaChaves.Count == 7, luaChaves.Count.ToString());
+Check("le numero inteiro", luaChaves.First(k => k.Key == "MIN_LEVEL").Value == "30");
+Check("le decimal", luaChaves.First(k => k.Key == "XP_STEP").Value == "0.4");
+Check("le booleano", luaChaves.First(k => k.Key == "ALLOW_MAX_LEVEL").AsBoolean == true);
+Check("le string sem as aspas",
+      luaChaves.First(k => k.Key == "MAIL_SUBJECT").Unquoted == "Pertences do Prestigio");
+Check("pega o comentario de cima",
+      luaChaves.First(k => k.Key == "ALLOW_MAX_LEVEL").Comment.Contains("bonus de nivel maximo"));
+Check("pega o comentario no fim da linha",
+      luaChaves.First(k => k.Key == "MAX_PRESTIGE").Comment.Contains("sem limite"));
+Check("linha de enfeite nao vira explicacao",
+      !luaChaves.First(k => k.Key == "MIN_LEVEL").Comment.Contains("---"));
+// 'local naoEhConfig = 5' nao e configuracao: nome minusculo, fora da tabela.
+Check("codigo Lua solto nao entra", luaChaves.All(k => k.Key != "naoEhConfig"));
+
+// editar
+var luaNovo = LuaConfig.SetValue(luaTexto, "MAX_PRESTIGE", "20")!;
+Check("trocou o valor", LuaConfig.Parse(luaNovo).First(k => k.Key == "MAX_PRESTIGE").Value == "20");
+Check("preservou o comentario da linha", luaNovo.Contains("-- teto. 0 = sem limite"));
+Check("preservou a virgula", luaNovo.Contains("MAX_PRESTIGE   = 20,"));
+Check("preservou o CRLF", luaNovo.Contains("\r\n"));
+Check("nao duplicou a chave",
+      LuaConfig.Parse(luaNovo).Count(k => k.Key == "MAX_PRESTIGE") == 1);
+Check("nao mexeu nas outras",
+      LuaConfig.Parse(luaNovo).First(k => k.Key == "XP_STEP").Value == "0.4");
+
+Check("funciona em LF tambem",
+      LuaConfig.Parse(LuaConfig.SetValue(luaTexto.Replace("\r\n", "\n"), "MIN_LEVEL", "5")!)
+               .First(k => k.Key == "MIN_LEVEL").Value == "5");
+Check("chave inexistente devolve null", LuaConfig.SetValue(luaTexto, "NAO_EXISTE", "1") is null);
+
+var luaMulti = LuaConfig.SetValues(luaTexto, new[]
+{
+    new KeyValuePair<string, string>("MIN_LEVEL", "10"),
+    new KeyValuePair<string, string>("INVENTADA", "1"),
+}, out var luaFaltando);
+Check("aplica varias de uma vez",
+      LuaConfig.Parse(luaMulti).First(k => k.Key == "MIN_LEVEL").Value == "10");
+Check("relata o que nao existe", luaFaltando.Count == 1 && luaFaltando[0] == "INVENTADA");
+
+// FormatLike: o tipo do valor que ja estava lá manda
+var kMin = luaChaves.First(k => k.Key == "MIN_LEVEL");
+var kStep = luaChaves.First(k => k.Key == "XP_STEP");
+var kBool = luaChaves.First(k => k.Key == "ALLOW_MAX_LEVEL");
+var kTexto = luaChaves.First(k => k.Key == "MAIL_SUBJECT");
+
+Check("inteiro continua inteiro", LuaConfig.FormatLike(kMin, "40") == "40");
+Check("inteiro nao ganha decimal", LuaConfig.FormatLike(kMin, "40.0") == "40");
+Check("decimal continua decimal", LuaConfig.FormatLike(kStep, "0.5") == "0.5");
+Check("virgula do teclado brasileiro vale", LuaConfig.FormatLike(kStep, "0,5") == "0.5");
+Check("booleano aceita sim", LuaConfig.FormatLike(kBool, "sim") == "true");
+Check("booleano aceita nao", LuaConfig.FormatLike(kBool, "não") == "false");
+Check("booleano aceita false", LuaConfig.FormatLike(kBool, "FALSE") == "false");
+Check("booleano recusa numero", LuaConfig.FormatLike(kBool, "7") is null);
+Check("numero recusa texto", LuaConfig.FormatLike(kMin, "trinta") is null);
+Check("string sai entre aspas", LuaConfig.FormatLike(kTexto, "Meus itens") == "\"Meus itens\"");
+Check("string escapa a aspa dupla",
+      LuaConfig.FormatLike(kTexto, "diz \"oi\"") == "\"diz \\\"oi\\\"\"");
+Check("string recusa quebra de linha", LuaConfig.FormatLike(kTexto, "a\nb") is null);
+
+// grava sem BOM: alguns builds de Lua recusam arquivo com BOM
+var luaDir = Path.Combine(Path.GetTempPath(), "lua-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(luaDir);
+try
+{
+    var alvo = Path.Combine(luaDir, "01_prestige_config.lua");
+    LuaConfig.Save(alvo, luaTexto);
+    var bytes = File.ReadAllBytes(alvo);
+    Check("gravou sem BOM", !(bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF));
+    Check("le de disco", LuaConfig.ReadValues(alvo)["MIN_LEVEL"] == "30");
+    Check("arquivo inexistente devolve vazio",
+          LuaConfig.ReadValues(Path.Combine(luaDir, "nao-existe.lua")).Count == 0);
+}
+finally
+{
+    try { Directory.Delete(luaDir, true); } catch { }
+}
+
+// --- o arquivo de verdade do mod ---
+Console.WriteLine("\n=== PrestigeSettings contra o arquivo do mod ===");
+
+string? raizPrestige = null;
+for (var pasta = new DirectoryInfo(AppContext.BaseDirectory); pasta is not null; pasta = pasta.Parent)
+{
+    if (Directory.Exists(Path.Combine(pasta.FullName, "mods", "prestige")))
+    {
+        raizPrestige = pasta.FullName;
+        break;
+    }
+}
+
+var configReal = Path.Combine(raizPrestige ?? "", "mods", "prestige", "lua_scripts",
+                              "01_prestige_config.lua");
+
+if (!File.Exists(configReal))
+{
+    Check("achei o 01_prestige_config.lua do mod", false, configReal);
+}
+else
+{
+    var doArquivo = LuaConfig.Parse(File.ReadAllText(configReal));
+    var porChave = doArquivo.ToDictionary(k => k.Key, k => k, StringComparer.Ordinal);
+
+    Check("o arquivo do mod tem chaves", doArquivo.Count > 10, doArquivo.Count.ToString());
+
+    // Chave do catalogo que nao existe no arquivo e um campo que nao grava nada.
+    var semArquivo = PrestigeSettings.All.Where(x => !porChave.ContainsKey(x.Key))
+                                         .Select(x => x.Key).ToList();
+    Check("toda chave do catalogo existe no arquivo do mod",
+          semArquivo.Count == 0, string.Join(", ", semArquivo));
+
+    // E o inverso: chave do arquivo que a tela nao expoe fica invisivel.
+    var semCatalogo = doArquivo.Where(k => PrestigeSettings.Find(k.Key) is null)
+                               .Select(k => k.Key).ToList();
+    Check("toda chave do arquivo aparece na tela",
+          semCatalogo.Count == 0, string.Join(", ", semCatalogo));
+
+    // Editar o arquivo de verdade tem que mexer numa linha so.
+    var luaAntes = File.ReadAllText(configReal);
+    var luaDepois = LuaConfig.SetValue(luaAntes, "XP_STEP", "0.5")!;
+    var linhasAntes = luaAntes.Split('\n');
+    var linhasDepois = luaDepois.Split('\n');
+    Check("editar nao muda a contagem de linhas", linhasAntes.Length == linhasDepois.Length);
+    Check("editar muda exatamente uma linha",
+          linhasAntes.Zip(linhasDepois).Count(x => x.First != x.Second) == 1);
+
+    // Os tipos do catalogo tem que casar com os do arquivo: campo numerico
+    // sobre um booleano gravaria 'true' onde o Lua espera numero.
+    var tiposErrados = new List<string>();
+    foreach (var ajuste in PrestigeSettings.All)
+    {
+        if (!porChave.TryGetValue(ajuste.Key, out var atual)) continue;
+
+        var casa = ajuste.Kind switch
+        {
+            PrestigeKind.Booleano => atual.IsBoolean,
+            PrestigeKind.Numero => atual.AsNumber is not null,
+            _ => !atual.IsBoolean && atual.AsNumber is null,
+        };
+        if (!casa) tiposErrados.Add($"{ajuste.Key} ({ajuste.Kind} vs {atual.Value})");
+    }
+    Check("o tipo de cada campo casa com o do arquivo",
+          tiposErrados.Count == 0, string.Join(", ", tiposErrados));
+
+    // Validacao com o valor real do arquivo
+    var sMax = PrestigeSettings.Find("MAX_PRESTIGE")!;
+    Check("aceita valor dentro da faixa",
+          PrestigeSettings.TryFormat(sMax, porChave["MAX_PRESTIGE"], "12", out _, out _));
+    Check("recusa acima do maximo",
+          !PrestigeSettings.TryFormat(sMax, porChave["MAX_PRESTIGE"], "9999", out _, out _));
+    Check("recusa texto num campo numerico",
+          !PrestigeSettings.TryFormat(sMax, porChave["MAX_PRESTIGE"], "dez", out _, out _));
+
+    var sDebug = PrestigeSettings.Find("DEBUG")!;
+    Check("booleano aceita sim",
+          PrestigeSettings.TryFormat(sDebug, porChave["DEBUG"], "sim", out var vDebug, out _)
+          && vDebug == "true");
+}
+
+// --- a curva de XP: e a calibragem que o README avisa ---
+Check("curva com os valores de fabrica tem 10 passos",
+      PrestigeSettings.XpCurve(10, 0.4, 5.0).Count == 10);
+Check("o primeiro prestigio da 1,4x",
+      Math.Abs(PrestigeSettings.XpCurve(10, 0.4, 5.0)[0].Multiplicador - 1.4) < 1e-9);
+Check("o decimo bate exatamente no teto",
+      Math.Abs(PrestigeSettings.XpCurve(10, 0.4, 5.0)[^1].Multiplicador - 5.0) < 1e-9);
+Check("a calibragem de fabrica nao acusa nada",
+      PrestigeSettings.CurveWarning(10, 0.4, 5.0) is null,
+      PrestigeSettings.CurveWarning(10, 0.4, 5.0));
+
+// Mexer no teto de prestigios sem recalcular o passo: os ultimos viram custo
+// puro. E exatamente o erro que o README do mod destaca.
+var avisoCurva = PrestigeSettings.CurveWarning(20, 0.4, 5.0);
+Check("teto alcancado antes do fim e acusado", avisoCurva is not null);
+Check("o aviso diz em que prestigio o teto chega",
+      avisoCurva!.Contains("10"), avisoCurva);
+Check("o aviso diz quantos viram custo sem beneficio", avisoCurva.Contains("10 viram custo"));
+
+var avisoBaixo = PrestigeSettings.CurveWarning(5, 0.4, 5.0);
+Check("teto inalcancavel tambem e acusado", avisoBaixo is not null);
+Check("o aviso diz onde a curva para", avisoBaixo!.Contains("3"), avisoBaixo);
+
+Check("sem limite de prestigio nao ha curva", PrestigeSettings.XpCurve(0, 0.4, 5.0).Count == 0);
+Check("sem curva nao ha aviso", PrestigeSettings.CurveWarning(0, 0.4, 5.0) is null);
+
 // -------------------------------------------------- criar itens ----------
 Console.WriteLine("\n=== ItemBuilder: montar um item novo ===");
 

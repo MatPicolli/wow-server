@@ -96,6 +96,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\fix-database.ps1          # missing *_dbc tables + empty realmlist
 .\scripts\fix-module-name.ps1       # mod-eluna -> mod-ale; preview, then -Apply
 .\scripts\apply-sql.ps1 -File x.sql  # backup + transaction; preview, then -Apply
+.\scripts\install-prestige.ps1      # the Lua mod in mods\prestige; preview, then -Apply
 ```
 
 Every script above is reachable from the GUI (a test enforces it). The three
@@ -142,6 +143,34 @@ scripts, not in C#**, so both entry points benefit.
 helpers: settings loading with defaults, `Invoke-MySql`, progress rendering,
 `Write-Fail`. It also sets `[Console]::OutputEncoding` to UTF-8 (see gotchas).
 
+### Vendored mods
+
+`mods/prestige/` is a third-party Lua mod for the ALE engine, brought into the
+repository so it survives a reinstall — the user's own copy lived only on their
+machine. It ships its own README, which is the authority on what it does.
+
+Two things about it shape the code here:
+
+- **It is destructive.** A player who prestiges loses level, quests and
+  achievements, and gets their gear back by mail *without* enchants or gems,
+  because the mail API creates fresh items from an entry id. There is no undo
+  and the only recovery is a database backup. The GUI says this in red before
+  the install button, not in a tooltip.
+- **Its SQL was not re-runnable.** `prestige_maxlevel_upgrade.sql` was a plain
+  `ALTER TABLE ... ADD COLUMN` with a "run once" comment; a second run fails
+  with `ERROR 1060 Duplicate column name`. Since the GUI runs it, and cannot
+  know whether it ran before, it was rewritten around an `information_schema`
+  check (MySQL 8 has no `ADD COLUMN IF NOT EXISTS`) and marked
+  `-- [ajuste local]`, the mod's own convention for local edits.
+
+The NPC it needs is created by copying an existing gossip creature **through a
+temporary table** (`CREATE TEMPORARY TABLE ... SELECT *`, patch, re-insert), so
+the copy carries whatever columns this database happens to have. Naming columns
+would have hit the older-schema problem; the base entry is chosen by querying
+for a humanoid that already has gossip and a model, not hardcoded. If
+`creature_template_model` is absent the model came along in the row itself, and
+the script says so.
+
 ### Configuration
 
 `config/settings.psd1` (gitignored, created from `settings.example.psd1`) holds
@@ -152,7 +181,12 @@ than returning `$null`.
 
 The GUI edits this file surgically through `Psd1Editor` rather than
 regenerating it, because the file is mostly explanatory comments meant to be
-read and hand-edited. `ConfFile` does the same job for AzerothCore's `.conf`
+read and hand-edited. `LuaConfig` does it for the prestige mod's
+`01_prestige_config.lua` — `CHAVE = valor,` inside a Lua table, comments kept,
+verified by editing the real file and then loading the result in an actual Lua
+interpreter to read the values back. It is not a Lua parser: numbers, booleans
+and double-quoted strings only, so what it cannot understand it does not touch.
+`ConfFile` does the same job for AzerothCore's `.conf`
 files, for the same reason — those are ~80% comment, and that comment is what
 the module config window shows as each option's help. Verified against the real
 `worldserver.conf.dist` (589 keys) plus three real module configs: changing one

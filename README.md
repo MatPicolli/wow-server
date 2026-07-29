@@ -209,6 +209,8 @@ scripts/
   setup-all.ps1             encadeia 00 -> 07
   start-server.ps1
   stop-server.ps1
+mods/
+  prestige/                 mod de prestígio (Lua/ALE) — instalável pela GUI
 docs/
   passo-a-passo.md          instalação manual, sem os scripts
   pos-instalacao.md         GM, LAN/internet, mods, backup

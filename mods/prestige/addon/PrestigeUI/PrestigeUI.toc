@@ -1,0 +1,8 @@
+## Interface: 30300
+## Title: Prestige UI
+## Notes: Mostra seu nivel de prestigio e o multiplicador de XP.
+## Author: -
+## Version: 1.0
+## SavedVariablesPerCharacter: PrestigeUIDB
+
+PrestigeUI.lua
