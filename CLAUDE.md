@@ -65,6 +65,16 @@ These change how code gets written *here*:
   silently isn't there. Our pipeline doesn't have this problem: `06-deploy.ps1`
   copies the binaries and every `.conf.dist`, module configs included.
 
+The core is written for levels going **up**. On a level drop, both
+`UpdateSkillsForLevel` and `_LoadSkills` update a level-scaled skill's
+**maximum** and leave its **value** alone, and `AT_LOGIN_RESET_SPELLS` →
+`LearnDefaultSkills` skips any skill the character already has
+(`if (HasSkill(skillId)) continue`). So wiping spells does not wipe weapon or
+spell-school skills: a level-1 character keeps Fire at 400 with a max of 5.
+Anything that lowers a character's level has to reset those explicitly, and
+`Player:SetSkill` on a skill the character lacks **teaches** it, so `HasSkill`
+first is load-bearing rather than an optimisation.
+
 Two things there are worth copying if anything here ever generates Lua or SQL
 for that server: ALE's hook 61 hands you the skill's **absolute** value, not the
 gain (multiplying it takes Mining from 150 to 450 — hook 62 is the one that

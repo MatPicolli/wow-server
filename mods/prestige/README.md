@@ -263,6 +263,7 @@ Tudo em `01_prestige_config.lua`, tabela `Prestige.Config`.
 | `RESET_TALENTS` | `true` | Zera talentos |
 | `RESET_ACHIEVEMENTS` | `true` | Zera conquistas |
 | `RESET_SPELLS` | `true` | Zera magias. **Requer o snapshot de profissões** (ver abaixo) |
+| `RESET_LEVEL_SKILLS` | `true` | **[ajuste local]** Devolve para 1 as perícias que escalam com o nível: armas, escolas de magia e Defesa. Ver abaixo |
 
 ### NPC e visual
 
@@ -317,7 +318,7 @@ Ordem obrigatória das operações:
 3. snapshot de profissões
 4. enviar itens por correio
 5. remover itens do inventário
-6. resetar nível/quests/conquistas
+6. resetar nível/quests/conquistas, e as perícias de nível depois do nível
 7. incrementar contador
 8. conceder Bênção (se oldLevel >= SERVER_MAX_LEVEL)
 9. WAL → DONE, logout forçado
@@ -406,6 +407,38 @@ A forma idiomática de zerar magias e talentos no core são as flags `at_login` 
 O problema: `AT_LOGIN_RESET_SPELLS` também apaga as magias de profissão. Daí `character_prestige_skills` — valor e máximo de cada profissão são salvos antes do wipe e restaurados no login seguinte.
 
 Sem `RESET_SPELLS`, um personagem nível 1 sai por aí com magias de nível 80. Com ele, as profissões precisam do snapshot. Não há terceira opção.
+
+### Perícias de nível: o core não as baixa
+
+**[ajuste local]** `RESET_SPELLS` apaga as *magias*, não os valores das
+*perícias*. São coisas diferentes, e sem tratar a segunda o personagem fica
+nível 1 com Fogo em 400.
+
+O motivo está no core, e vale conhecer porque não é intuitivo:
+
+- Quando o nível muda, `UpdateSkillsForLevel` faz
+  `MAKE_SKILL_VALUE(val, maxSkill)` — atualiza o **máximo** e mantém o
+  **valor** (`PlayerUpdates.cpp`). No carregamento, `_LoadSkills` faz o mesmo:
+  `max = GetMaxSkillValueForLevel()`, e não toca no valor.
+- `AT_LOGIN_RESET_SPELLS` chama `LearnDefaultSkills`, que por perícia faz
+  `if (HasSkill(skillId)) continue` — perícia que o personagem já tem é pulada,
+  com o valor antigo intacto.
+
+Nada disso é bug: o core nunca foi feito para nível **caindo**. Então o reset é
+explícito, em `Prestige.LEVEL_SKILLS`, depois do `SetLevel(1)` — o `SetLevel` do
+ALE chama `Player::GiveLevel`, que já acerta o máximo, então nesse ponto
+`GetMaxSkillValue` devolve 5 e não 400.
+
+A tabela lista o que **resetar**, não o que preservar. Se faltar uma entrada,
+uma perícia fica alta — chato e visível. Se fosse lista de exceções e faltasse
+uma, apagaria idioma (300/300) ou profissão — dano. Idiomas e proficiências de
+armadura (1/1) ficam de fora por não estarem na lista.
+
+`HasSkill` antes de `SetSkill` não é otimização: `SetSkill` numa perícia que o
+personagem não tem **a ensina**, e um mago sairia sabendo Espadas.
+
+Profissões seguem preservadas pelo snapshot — as duas tabelas não se cruzam, e
+um teste confere isso.
 
 ### Correio: itens por entry, não por instância
 
@@ -517,6 +550,11 @@ Conferir que o arquivo tem alguns MB. Um dump que falhou também termina sem rec
 4. **Dry run.** `Prestige.DryRun(player)` — lista item por item o que seria enviado, sem tocar em nada. **Testar com bolsa dentro de bolsa** e com bolsas cheias.
 5. **Item encantado.** Confirmar visualmente que o encantamento se perde. É comportamento esperado, não bug — mas precisa ser visto para não virar surpresa em produção.
 6. **Profissão em 450.** Prestigiar e confirmar que volta após o relogin. Valida a assinatura de `SetSkill`.
+6b. **Perícia de arma e de magia.** Antes de prestigiar, anotar Fogo (ou a escola
+   da classe) e a arma em uso na aba de perícias. Depois do relogin, as duas
+   precisam estar em **1/5**, e as profissões nos valores antigos. É o mesmo
+   `SetSkill` dos dois lados: se um funcionar e o outro não, o problema é a
+   tabela, não a API.
 7. **Crash no meio.** `kill -9` no worldserver durante o envio de cartas. Confirmar que o WAL detecta na volta e congela em `MAILING`.
 8. **Bênção.** Prestigiar no nível 80. Verificar cada multiplicador separadamente:
    - reputação: matar mob com facção associada, comparar ganho
@@ -574,4 +612,6 @@ Itens desejáveis, nenhum bloqueante:
 - **Prestígio por conta** em vez de por personagem. A coluna `account` já existe na tabela.
 - **Preservação de instâncias de item**, caso apareça uma forma segura de gerar IDs de correio.
 - **Substituir o polling de honra** se o ALE ganhar hook de honra.
-- **Auditoria de weapon skills e proficiências** após `RESET_SPELLS` no build específico.
+- ~~**Auditoria de weapon skills e proficiências** após `RESET_SPELLS`~~ — feito:
+  ver [Perícias de nível](#perícias-de-nível-o-core-não-as-baixa). Proficiências
+  de armadura são `1/1` e não precisam de nada.

@@ -184,6 +184,40 @@ local function WipeProgress(player)
     -- Nivel por ultimo: mexer no nivel invalida caches de stat.
     player:SetLevel(1)
 
+    -- [ajuste local] Skills que escalam com o nivel.
+    --
+    -- Tem que vir DEPOIS do SetLevel(1). O SetLevel do ALE chama
+    -- Player::GiveLevel, que chama UpdateSkillsForLevel e ja acerta o
+    -- MAXIMO para o nivel novo -- entao aqui o GetMaxSkillValue devolve 5,
+    -- e nao 400. Antes do SetLevel a skill sairia com maximo de nivel 80.
+    --
+    -- E nao da para deixar isso para o core: quando o nivel muda ele
+    -- chama UpdateSkillsForLevel, que faz MAKE_SKILL_VALUE(val, maxSkill)
+    -- -- baixa o maximo e MANTEM o valor. Um nivel 1 ficaria com Fogo em
+    -- 400 e maximo 5.
+    if CFG.RESET_LEVEL_SKILLS then
+        local zeradas = 0
+
+        for skillId, _ in pairs(Prestige.LEVEL_SKILLS) do
+            -- HasSkill primeiro: SetSkill numa skill que o personagem nao
+            -- tem a ENSINARIA, e um mago sairia sabendo Espadas.
+            if player:HasSkill(skillId) then
+                -- Nao usar Prestige.PROFESSION_SKILLS como guarda aqui: as
+                -- duas tabelas nao se cruzam, e conferir daria a impressao
+                -- errada de que poderiam.
+                local maximo = player:GetMaxSkillValue(skillId)
+                local ok = pcall(function() player:SetSkill(skillId, 0, 1, maximo) end)
+                if ok then zeradas = zeradas + 1 end
+            end
+        end
+
+        Prestige.Log(guid, "SKILLS_RESET", string.format("zeradas=%d", zeradas))
+        if CFG.DEBUG then
+            PrintInfo(string.format("[Prestige] %d skill(s) de nivel zeradas para %s",
+                                    zeradas, player:GetName()))
+        end
+    end
+
     -- Flags at_login: a forma idiomatica do core de fazer limpeza
     -- pesada. Ele executa no proximo carregamento do personagem,
     -- fora de qualquer caminho quente.

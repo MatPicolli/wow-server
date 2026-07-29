@@ -182,6 +182,17 @@ public static class PrestigeSettings
             "Apaga as conquistas do personagem.")
         { Warning = "Não tem desfazer. O único jeito de voltar é o backup do banco." },
 
+        new PrestigeSetting("RESET_LEVEL_SKILLS", "Zerar skills de arma e magia",
+            ResetCategoria, PrestigeKind.Booleano,
+            "Devolve para 1 as perícias que sobem com o nível: armas, escolas de "
+            + "magia (Fogo, Gelo, Arcano, Sagrado, Natureza, Sombras) e Defesa.")
+        {
+            Warning = "Deixando desligado, o personagem fica nível 1 com Fogo em 400 e "
+                    + "máximo 5. Não é o mod: o core só baixa o máximo quando o nível "
+                    + "cai, nunca o valor — ele não foi feito para nível caindo. "
+                    + "Profissões não entram aqui: continuam preservadas pelo snapshot.",
+        },
+
         new PrestigeSetting("RESET_SPELLS", "Zerar magias", ResetCategoria,
             PrestigeKind.Booleano,
             "Apaga as magias aprendidas e re-ensina as iniciais da classe. Sem "

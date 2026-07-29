@@ -957,6 +957,47 @@ else
     Check("o tipo de cada campo casa com o do arquivo",
           tiposErrados.Count == 0, string.Join(", ", tiposErrados));
 
+    // As duas tabelas de skill do mod nao podem se cruzar: LEVEL_SKILLS e o
+    // que volta para 1, PROFESSION_SKILLS e o que e preservado pelo snapshot.
+    // Um id nas duas seria zerado e restaurado no mesmo prestigio, e qual dos
+    // dois ganha depende da ordem - o tipo de bug que aparece uma vez em dez.
+    var conteudoConfig = File.ReadAllText(configReal);
+
+    static HashSet<int> IdsDaTabela(string texto, string nome)
+    {
+        var ids = new HashSet<int>();
+        var inicio = texto.IndexOf(nome + " = {", StringComparison.Ordinal);
+        if (inicio < 0) return ids;
+
+        var fim = texto.IndexOf("\n}", inicio, StringComparison.Ordinal);
+        if (fim < 0) fim = texto.Length;
+
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(
+                     texto[inicio..fim], @"\[(\d+)\]\s*="))
+        {
+            ids.Add(int.Parse(m.Groups[1].Value));
+        }
+        return ids;
+    }
+
+    var idsNivel = IdsDaTabela(conteudoConfig, "Prestige.LEVEL_SKILLS");
+    var idsProf = IdsDaTabela(conteudoConfig, "Prestige.PROFESSION_SKILLS");
+
+    Check("achei a tabela de skills de nivel", idsNivel.Count > 10, idsNivel.Count.ToString());
+    Check("achei a tabela de profissoes", idsProf.Count > 10, idsProf.Count.ToString());
+
+    var cruzam = idsNivel.Intersect(idsProf).ToList();
+    Check("as duas tabelas de skill nao se cruzam",
+          cruzam.Count == 0, string.Join(", ", cruzam));
+
+    // As perícias que o usuario apontou como o problema, pelo id do 3.3.5a.
+    Check("Fogo (8) esta na lista do que reseta", idsNivel.Contains(8));
+    Check("Espadas (43) esta na lista do que reseta", idsNivel.Contains(43));
+    Check("Defesa (95) esta na lista do que reseta", idsNivel.Contains(95));
+    Check("Mineracao (186) NAO esta na lista do que reseta", !idsNivel.Contains(186));
+    Check("Montaria (762) NAO esta na lista do que reseta", !idsNivel.Contains(762));
+
     // Validacao com o valor real do arquivo
     var sMax = PrestigeSettings.Find("MAX_PRESTIGE")!;
     Check("aceita valor dentro da faixa",

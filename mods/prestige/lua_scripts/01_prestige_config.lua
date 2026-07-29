@@ -72,6 +72,16 @@ Prestige.Config = {
     RESET_TALENTS     = true,
     RESET_ACHIEVEMENTS = true,
 
+    -- [ajuste local] Devolve para 1 as skills que escalam com o nivel
+    -- (armas, escolas de magia, defesa). Ver Prestige.LEVEL_SKILLS mais
+    -- abaixo: o core nao baixa esses valores sozinho quando o nivel cai,
+    -- so o maximo -- entao sem isto o personagem fica nivel 1 com Fogo
+    -- em 400 e maximo 5.
+    --
+    -- Profissoes NAO entram aqui: elas continuam preservadas pelo
+    -- snapshot em character_prestige_skills.
+    RESET_LEVEL_SKILLS = true,
+
     -- Cuidado: apaga TODAS as magias e re-ensina as iniciais de classe.
     -- Sem isso, um personagem nivel 1 sai por ai com magias de nivel 80.
     -- Com isso, as magias de profissao tambem somem -- por isso o
@@ -119,6 +129,45 @@ Prestige.PROFESSION_SKILLS = {
     [197] = "Alfaiataria",    [129] = "Primeiros Socorros",
     [185] = "Culinaria",      [356] = "Pesca",
     [762] = "Montaria",
+}
+
+-- [ajuste local] Skills que escalam com o nivel: armas, escolas de
+-- magia, defesa. Estas VOLTAM para 1 no prestigio.
+--
+-- Por que precisa desta tabela: o core nunca foi feito para nivel
+-- caindo. Quando o nivel muda ele chama UpdateSkillsForLevel, que faz
+-- MAKE_SKILL_VALUE(val, maxSkill) -- baixa so o MAXIMO e mantem o
+-- VALOR (PlayerUpdates.cpp). E o _LoadSkills, no carregamento, tambem
+-- ajusta so o max. Resultado sem isto: personagem nivel 1 com Fogo em
+-- 400 e maximo 5.
+--
+-- AT_LOGIN_RESET_SPELLS nao resolve: ele apaga as MAGIAS e chama
+-- LearnDefaultSkills, que tem 'if (HasSkill(skillId)) continue' -- ou
+-- seja, skill que o personagem ja tem e pulada, com o valor antigo
+-- intacto.
+--
+-- E uma lista do que RESETAR, nao do que preservar, de proposito: se
+-- faltar uma entrada aqui, uma skill fica alta (chato); se fosse lista
+-- de excecoes e faltasse uma, apagaria idioma ou profissao (dano).
+-- Idiomas (300/300) e proficiencias de armadura (1/1) ficam de fora.
+Prestige.LEVEL_SKILLS = {
+    -- defesa
+    [95]  = "Defesa",
+    -- armas corpo a corpo
+    [43]  = "Espadas",             [55]  = "Espadas de duas maos",
+    [44]  = "Machados",            [172] = "Machados de duas maos",
+    [54]  = "Macas",               [160] = "Macas de duas maos",
+    [136] = "Cajados",             [229] = "Armas de haste",
+    [173] = "Adagas",              [162] = "Desarmado",
+    [473] = "Armas de punho",
+    -- armas a distancia
+    [45]  = "Arcos",               [226] = "Bestas",
+    [46]  = "Armas de fogo",       [176] = "Arremesso",
+    [228] = "Varinhas",
+    -- escolas de magia
+    [237] = "Arcano",              [8]   = "Fogo",
+    [6]   = "Gelo",                [56]  = "Sagrado",
+    [134] = "Natureza",            [78]  = "Sombras",
 }
 
 -- Moedas especiais preservadas (entries de item). O ouro ja e
