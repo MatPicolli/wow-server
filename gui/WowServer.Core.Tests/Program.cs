@@ -1644,6 +1644,83 @@ else
     Check("todo StaticResource usado existe", recursosFaltando.Count == 0,
           string.Join(", ", recursosFaltando));
 
+    // 'rank' e palavra RESERVADA no MySQL 8 (a funcao de janela RANK()) e sem
+    // crase o servidor devolve ERROR 1064 apontando para ela como erro de
+    // sintaxe. O MariaDB aceita sem crase - entao um teste local passa e o
+    // MySQL 8 do usuario falha, que foi exatamente o que aconteceu com o NPC do
+    // prestigio. Este teste varre o SQL do repositorio para nao repetir.
+    // 'groups' fica FORA da lista de proposito, apesar de ser reservada: em
+    // PowerShell, '$m.Groups[...]' de um Match casa com a mesma forma de coluna
+    // qualificada e enche o teste de falso positivo. Nenhum SQL deste
+    // repositorio escreve na tabela 'groups'; se algum dia escrever, a crase
+    // tem que entrar a mao.
+    var reservadasMySql8 = new[]
+    {
+        "rank", "system", "over", "window", "recursive", "lateral",
+        "row_number", "dense_rank", "percent_rank", "cume_dist", "ntile",
+        "first_value", "last_value", "grouping", "json_table", "except",
+    };
+
+    var raizRepo = Directory.GetParent(repo)!.FullName;
+    var arquivosComSql = new List<string>();
+    foreach (var (pasta, padrao) in new[]
+             {
+                 (Path.Combine(raizRepo, "scripts"), "*.ps1"),
+                 (Path.Combine(raizRepo, "mods"), "*.sql"),
+             })
+    {
+        if (Directory.Exists(pasta))
+            arquivosComSql.AddRange(Directory.GetFiles(pasta, padrao, SearchOption.AllDirectories));
+    }
+
+    var semCrase = new List<string>();
+
+    // Procurar a palavra em POSICAO DE IDENTIFICADOR, nao numa linha que
+    // pareca SQL. A primeira versao deste teste filtrava linha por linha por
+    // palavras como UPDATE e SET, e nao pegava nada: num comando de varias
+    // linhas, o 'rank = 0' fica numa linha que nao tem nenhuma delas. Foi
+    // assim que ele passou com o bug ainda no arquivo.
+    //
+    // Posicao de identificador e: seguida de '=', '<', '>' ou ',', ou
+    // precedida de ponto (ct.rank).
+    var emPosicaoDeColuna = new System.Text.RegularExpressions.Regex(
+        @"(?:(?<=\.)(?<p1>" + string.Join("|", reservadasMySql8) + @")\b"
+        + @"|\b(?<p2>" + string.Join("|", reservadasMySql8) + @")\b(?=[ \t]*[=<>,]))",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    foreach (var arquivo in arquivosComSql)
+    {
+        var linhas = File.ReadAllLines(arquivo);
+        for (var i = 0; i < linhas.Length; i++)
+        {
+            var textoLinha = linhas[i];
+            var enxuta = textoLinha.TrimStart();
+
+            // Comentario nao vai para o banco.
+            if (enxuta.StartsWith("#", StringComparison.Ordinal) ||
+                enxuta.StartsWith("--", StringComparison.Ordinal) ||
+                enxuta.StartsWith("//", StringComparison.Ordinal)) continue;
+
+            foreach (System.Text.RegularExpressions.Match achado in emPosicaoDeColuna.Matches(textoLinha))
+            {
+                var palavra = achado.Groups["p1"].Success
+                    ? achado.Groups["p1"].Value
+                    : achado.Groups["p2"].Value;
+
+                // Ja entre crases: tudo certo.
+                var charAntes = achado.Index > 0 ? textoLinha[achado.Index - 1] : ' ';
+                var idxDepois = achado.Index + palavra.Length;
+                var charDepois = idxDepois < textoLinha.Length ? textoLinha[idxDepois] : ' ';
+                if (charAntes == '`' || charDepois == '`') continue;
+
+                semCrase.Add($"{Path.GetFileName(arquivo)}:{i + 1} ({palavra})");
+            }
+        }
+    }
+
+    Check("nenhuma palavra reservada do MySQL 8 sem crase no SQL",
+          semCrase.Count == 0, string.Join(", ", semCrase));
+
     // Script que ninguem alcanca pela interface e uma funcionalidade que so
     // existe para quem abre o PowerShell. Este teste falha de proposito quando
     // um script novo entra sem botao - ou o botao aparece, ou o script entra na

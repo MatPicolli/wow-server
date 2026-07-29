@@ -288,6 +288,22 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
   nothing to do.
 - MySQL 8 defaults to `sql_mode=only_full_group_by`; MariaDB does not. A
   `GROUP BY` that works locally may fail with `ERROR 1055` for the user.
+- **`rank` is a reserved word in MySQL 8** (the `RANK()` window function) and
+  must be backquoted. MariaDB accepts it bare, so this passes every local test
+  and fails on the user's server with `ERROR 1064 ... near 'rank'` — a syntax
+  error that names a column and looks like a typo. It cost a failed prestige
+  install. Backquote **every** identifier in generated SQL rather than guessing
+  which ones are reserved; a test scans `scripts/` and `mods/` for reserved
+  words in identifier position. That test only works because it looks for
+  `word =` and `.word`, not for lines that "look like SQL": in a multi-line
+  statement the offending line contains no SQL keyword at all, which is how the
+  first version of the check passed with the bug still in the file.
+- **A DB step that raised no exception is not a DB step that worked.**
+  `INSERT ... SELECT` from an empty temporary table succeeds and inserts
+  nothing, so the prestige install reported "NPC created" with no NPC and
+  exited 0. Verify the row, not the absence of an error — and keep "the user
+  didn't want this step" distinct from "this step failed", or a skip ends up
+  reported as success.
 - `MinCount`/`MaxCount` in loot tables are `tinyint unsigned`; writing >255
   fails the whole statement under strict mode, so clamp with `LEAST(255, ...)`
   and report when clamping happens.

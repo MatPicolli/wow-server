@@ -247,26 +247,34 @@ public partial class PrestigeView : UserControl
 
     // ---------------------------------------------------------- instalação --
 
-    private async Task RodarAsync(string[] argumentos)
+    /// <summary>
+    /// Devolve o código de saída, ou -1 se nem rodou.
+    ///
+    /// O código importa: 2 significa que parte entrou e parte não — tipicamente
+    /// o NPC. Tratar isso como sucesso faria a tela dizer "instalado" com o
+    /// jogador sem ter onde clicar.
+    /// </summary>
+    private async Task<int> RodarAsync(string[] argumentos)
     {
-        if (_ocupado) return;
+        if (_ocupado) return -1;
 
         if (!_runner.ScriptExists("install-prestige.ps1"))
         {
             Saida.Append("[erro] scripts\\install-prestige.ps1 não encontrado — atualize o repositório",
                          OutputKind.Error);
-            return;
+            return -1;
         }
 
         _ocupado = true;
         try
         {
             Saida.Append($"==> install-prestige.ps1 {string.Join(' ', argumentos)}");
-            await _runner.RunAsync("install-prestige.ps1", argumentos);
+            return await _runner.RunAsync("install-prestige.ps1", argumentos);
         }
         catch (Exception ex)
         {
             Saida.Append($"[erro] {ex.Message}", OutputKind.Error);
+            return -1;
         }
         finally
         {
@@ -292,7 +300,24 @@ public partial class PrestigeView : UserControl
             "Instalar o prestígio", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (r != MessageBoxResult.Yes) return;
 
-        await RodarAsync(new[] { "-Apply" });
+        var codigo = await RodarAsync(new[] { "-Apply" });
+
+        if (codigo == 2)
+        {
+            // O script já explicou o que faltou no console; aqui é para o aviso
+            // não passar batido quem estava olhando a caixa de diálogo.
+            MessageBox.Show(
+                "Instalou em parte.\n\n"
+                + "As tabelas e os scripts Lua estão no lugar, mas alguma coisa ficou "
+                + "faltando — o console ao lado diz o que, e o painel Situação também.\n\n"
+                + "O caso comum é o NPC: sem ele o mod está instalado mas não há onde "
+                + "clicar para prestigiar.",
+                "Instalação incompleta", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        else if (codigo == 0)
+        {
+            Saida.Append("[ok] instalado — reinicie o worldserver para o ALE carregar os scripts");
+        }
     }
 
     private async void Desinstalar_Click(object sender, RoutedEventArgs e)
