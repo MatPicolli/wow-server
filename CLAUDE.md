@@ -107,6 +107,7 @@ Copy-Item config\settings.example.psd1 config\settings.psd1   # first time; then
 .\scripts\fix-module-name.ps1       # mod-eluna -> mod-ale; preview, then -Apply
 .\scripts\apply-sql.ps1 -File x.sql  # backup + transaction; preview, then -Apply
 .\scripts\install-prestige.ps1      # the Lua mod in mods\prestige; preview, then -Apply
+.\scripts\install-heirlooms.ps1     # the 48 missing heirloom slots; preview, then -Apply
 ```
 
 Every script above is reachable from the GUI (a test enforces it). The three
@@ -378,6 +379,17 @@ Each of these was a shipped bug. The commit messages carry the full reasoning.
 - Heirlooms are `item_template.Quality = 7` (`ITEM_QUALITY_HEIRLOOM`). Query for
   them instead of hardcoding IDs — it picks up whatever modules added, and no
   invented item IDs can creep in.
+- **The `ScalingStatValue` bits are confirmed against the game's own heirlooms**,
+  not just read off `DBCStructure.h`: the six WotLK heirloom shoulders carry
+  257/129/65/33 = `0x1` (shoulder budget) plus `0x100` plate, `0x80` mail, `0x40`
+  leather, `0x20` cloth. `install-heirlooms.ps1` builds the missing slots by
+  cloning those rows through a temporary table, so `ScalingStatDistribution`
+  comes from a real piece rather than being invented.
+- **A generator that reads the table it writes closes a loop on itself.** The
+  heirloom artwork query picked a displayid from existing items of the same slot,
+  and on the second run it matched the pieces the first run had created — the
+  choice stopped depending only on the game's data. Any "find me an existing row
+  like this" query must exclude the range being written.
 - Rates like XP, movement speed and profession skill gain live in
   `worldserver.conf`, not the database — `tune-config.ps1` edits it in place and
   snapshots the original values to `configs/.tune-config-original.json` so

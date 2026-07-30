@@ -1,0 +1,84 @@
+<UserControl x:Class="WowServer.Gui.Views.HeirloomsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:WowServer.Gui.Views">
+    <Grid Margin="0,14,0,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="14" />
+            <ColumnDefinition Width="400" />
+        </Grid.ColumnDefinitions>
+
+        <DockPanel Grid.Column="0">
+            <StackPanel DockPanel.Dock="Top">
+                <TextBlock Text="Herança completa" Style="{StaticResource Titulo}" />
+                <TextBlock Style="{StaticResource Subtitulo}"
+                           Text="O WotLK só tem herança de ombro e peito, 10% de XP cada — 20% no total. Este mod cria os 8 slots que faltam (elmo, amuleto, braçadeiras, manoplas, cinto, grevas, botas e manto) nas 6 variantes de armadura do jogo: 48 peças, e o conjunto completo chega a 100%." />
+
+                <Border Background="{StaticResource BgPanel}" BorderBrush="{StaticResource Border}"
+                        BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Por que isso funciona" FontWeight="SemiBold" FontSize="13"
+                                   Margin="0,0,0,6" />
+                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextDim}"
+                                   Text="Auras de itens diferentes com o mesmo feitiço empilham — o core tem comentário explícito sobre isso, e é o mesmo motivo de ombro + peito darem 20% hoje. Cada peça é uma cópia de uma herança de verdade do seu banco, então os valores que fazem os atributos escalarem com o nível vêm prontos da peça original, em vez de inventados. O feitiço de XP é o mesmo que o jogo já usa (57353), então o cliente já o conhece." />
+                    </StackPanel>
+                </Border>
+
+                <!-- A limitacao que nao tem contorno pelo servidor. Fica na
+                     cara porque descobrir isso depois custa horas: o item
+                     parece meio funcionando, e o painel de personagem mostra
+                     ele normalmente. -->
+                <Border Background="#2A241A" BorderBrush="{StaticResource Warn}"
+                        BorderThickness="1" CornerRadius="3" Padding="10,8" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="O que o servidor não resolve sozinho" FontWeight="SemiBold"
+                                   FontSize="12" Foreground="{StaticResource Warn}" Margin="0,0,0,4" />
+                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource Warn}"
+                                   Text="Estas entries não existem no Item.dbc do cliente. O bônus de XP e os atributos funcionam, mas a peça fica sem ícone na bolsa, não equipa no botão direito e não faz som ao equipar. O painel de personagem mostra ela normalmente — essa diferença é o que faz o problema parecer intermitente. A correção é entregar ao cliente um Item.dbc com estas entries dentro de um MPQ de patch, e isso esta ferramenta não escreve." />
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <Button Content="Ver o que seria criado" Click="Previa_Click" />
+                    <Button Content="Criar as 48 peças" Style="{StaticResource BotaoPrincipal}"
+                            Click="Criar_Click" />
+                    <Button Content="Enviar para um personagem" Click="Enviar_Click"
+                            ToolTip="Manda por correio toda peça de herança que o banco tiver, em cartas de 12." />
+                    <Button Content="Apagar" Click="Apagar_Click"
+                            ToolTip="Remove as 48 peças. Quem tiver uma na bolsa fica com item inválido." />
+                </StackPanel>
+
+                <Border Background="{StaticResource BgPanel}" BorderBrush="{StaticResource Border}"
+                        BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,12">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,6">
+                            <TextBlock Text="Situação" FontWeight="SemiBold" FontSize="13" />
+                            <Button DockPanel.Dock="Right" Content="Reconferir" Padding="8,2" FontSize="11"
+                                    HorizontalAlignment="Right" Click="Reconferir_Click" />
+                        </DockPanel>
+                        <ItemsControl x:Name="ListaSituacao">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Texto}" Foreground="{Binding Cor}"
+                                               TextWrapping="Wrap" FontSize="11" Margin="0,0,0,3" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <DockPanel Margin="0,0,0,20">
+                    <TextBlock DockPanel.Dock="Left" Text="Personagem" VerticalAlignment="Center"
+                               Margin="0,0,4,0" FontSize="12" />
+                    <v:HelpIcon DockPanel.Dock="Left" Chave="cmd.personagem" Margin="0,0,8,0" />
+                    <TextBox x:Name="CaixaPersonagem" />
+                </DockPanel>
+            </StackPanel>
+
+            <Border />
+        </DockPanel>
+
+        <v:ConsolePane x:Name="Saida" Grid.Column="2" />
+    </Grid>
+</UserControl>

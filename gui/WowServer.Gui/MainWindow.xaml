@@ -34,6 +34,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
     </Window.Resources>
 
     <TabControl x:Name="Abas" SelectionChanged="Abas_SelectionChanged" TabStripPlacement="Left" Background="{StaticResource Bg}"
@@ -127,11 +128,11 @@
         <TabItem Style="{StaticResource AbaLateral}">
             <TabItem.Header>
                 <StackPanel Width="150">
-                    <TextBlock Text="Prestígio" />
-                    <TextBlock Text="ascensão e bônus" FontSize="10" Foreground="{StaticResource TextDim}" />
+                    <TextBlock Text="Extras" />
+                    <TextBlock Text="mods do servidor" FontSize="10" Foreground="{StaticResource TextDim}" />
                 </StackPanel>
             </TabItem.Header>
-            <v:PrestigeView />
+            <v:ExtrasView />
         </TabItem>
 
         <TabItem Style="{StaticResource AbaLateral}">

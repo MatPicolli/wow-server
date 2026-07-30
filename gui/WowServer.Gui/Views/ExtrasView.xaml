@@ -1,0 +1,24 @@
+<UserControl x:Class="WowServer.Gui.Views.ExtrasView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:WowServer.Gui.Views">
+    <!-- Cada sub-aba e um mod. Eles nao conversam entre si: o de prestigio
+         mexe em personagem, o de herancas mexe em item_template. Ficam juntos
+         aqui porque os dois sao acrescimo ao jogo, nao parte da instalacao. -->
+    <TabControl x:Name="SubAbas" Background="{StaticResource Bg}" BorderThickness="0"
+                Padding="0" Margin="24,18,24,0">
+        <TabControl.Resources>
+            <Style TargetType="TabPanel">
+                <Setter Property="Background" Value="Transparent" />
+            </Style>
+        </TabControl.Resources>
+
+        <TabItem Style="{StaticResource SubAba}" Header="Prestígio">
+            <v:PrestigeView />
+        </TabItem>
+
+        <TabItem Style="{StaticResource SubAba}" Header="Herança completa">
+            <v:HeirloomsView />
+        </TabItem>
+    </TabControl>
+</UserControl>

@@ -34,7 +34,36 @@ function Prestige.CanPrestige(player)
 
     local count = Prestige.GetCount(player)
     if CFG.MAX_PRESTIGE > 0 and count >= CFG.MAX_PRESTIGE then
-        return false, "Voce ja atingiu o prestigio maximo."
+        -- [ajuste local] Chegar ao teto NAO pode trancar a Bencao do Apice.
+        --
+        -- O caminho normal para o teto e a faixa 30-79, que nunca concede a
+        -- Bencao. Quem subisse assim ate o prestigio 10 ficava barrado aqui e
+        -- nao tinha mais como prestigiar no nivel maximo -- a recompensa
+        -- permanente virava inalcancavel justamente para quem jogou mais.
+        --
+        -- Entao no teto ainda cabe UMA ascensao: a do nivel maximo, e so
+        -- enquanto a Bencao nao foi concedida. O contador nao passa do teto
+        -- (ver Execute), entao isso nao vira XP extra - o que se ganha e a
+        -- Bencao, uma vez.
+        local podePelaBencao =
+            CFG.MAXLEVEL_BONUS_ENABLED
+            and CFG.ALLOW_MAX_LEVEL
+            and level >= CFG.SERVER_MAX_LEVEL
+            and Prestige.HasMaxLevelBonus
+            and not Prestige.HasMaxLevelBonus(player)
+
+        if not podePelaBencao then
+            if CFG.MAXLEVEL_BONUS_ENABLED and CFG.ALLOW_MAX_LEVEL
+               and Prestige.HasMaxLevelBonus and not Prestige.HasMaxLevelBonus(player) then
+                -- Esta no teto, ainda nao tem a Bencao, mas nao esta no nivel
+                -- maximo: dizer so "prestigio maximo" faria parecer que nao ha
+                -- mais nada a fazer, quando ha.
+                return false, string.format(
+                    "Voce esta no prestigio maximo, mas ainda falta a Bencao do Apice: "
+                    .. "chegue ao nivel %d e volte aqui.", CFG.SERVER_MAX_LEVEL)
+            end
+            return false, "Voce ja atingiu o prestigio maximo."
+        end
     end
 
     -- Estados que tornam a operacao insegura. Cada um destes ja causou

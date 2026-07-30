@@ -275,7 +275,15 @@ function Prestige.Execute(player)
     WipeProgress(player)
 
     -- 4. contador
+    --
+    -- [ajuste local] Preso ao teto. Quem esta no prestigio maximo ainda pode
+    -- ascender uma vez pela Bencao do Apice (ver CanPrestige), e sem esta trava
+    -- essa ascensao levaria o contador a 11 - passando do teto que MAX_PRESTIGE
+    -- define e alem do XP_CAP que a curva foi calibrada para atingir.
     local newCount = Prestige.GetCount(player) + 1
+    if CFG.MAX_PRESTIGE > 0 and newCount > CFG.MAX_PRESTIGE then
+        newCount = CFG.MAX_PRESTIGE
+    end
     Prestige.SaveCount(guid, accountId, newCount)
 
     -- 4b. bonus de nivel maximo.
@@ -337,8 +345,27 @@ function Prestige.Resume(player, stage, oldLevel)
     elseif stage == "WIPING" then
         -- Cartas ja sairam. Seguro terminar o reset.
         WipeProgress(player)
+        -- [ajuste local] Mesmo teto do Execute: a retomada tambem incrementa,
+        -- e sem a trava um crash na ascensao da Bencao levaria o contador a 11.
         local newCount = Prestige.LoadCount(guid) + 1
+        if CFG.MAX_PRESTIGE > 0 and newCount > CFG.MAX_PRESTIGE then
+            newCount = CFG.MAX_PRESTIGE
+        end
         Prestige.SaveCount(guid, player:GetAccountId(), newCount)
+
+        -- [ajuste local] A Bencao tambem na retomada. O WAL guarda old_level
+        -- justamente para isso, e o Execute concede a Bencao DEPOIS do
+        -- contador: quem caiu entre as duas coisas perdia a Bencao para sempre
+        -- e nao tinha como tentar de novo, porque o contador ja tinha subido.
+        --
+        -- Conceder e idempotente (grava a flag em 1), entao repetir nao custa.
+        if CFG.MAXLEVEL_BONUS_ENABLED
+           and oldLevel and oldLevel >= CFG.SERVER_MAX_LEVEL
+           and Prestige.GrantMaxLevelBonus then
+            Prestige.GrantMaxLevelBonus(guid)
+            player:SendBroadcastMessage("|cffffd100A Bencao do Apice e sua.|r")
+        end
+
         player:SaveToDB()
         CharDBExecute("UPDATE character_prestige_pending SET stage = 'DONE' WHERE guid = " .. guid)
         player:SendBroadcastMessage("|cff00ff00Prestigio concluido.|r")

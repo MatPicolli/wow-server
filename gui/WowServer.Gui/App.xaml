@@ -94,38 +94,160 @@
             <Setter Property="Margin"     Value="0,4" />
         </Style>
 
-        <!-- O ComboBox continua com o desenho padrao do Windows, que tem fundo
-             CLARO. O estilo implicito de TextBlock ali em cima pinta a letra de
-             quase branco, e ele alcanca tambem os TextBlock que o proprio
-             template do ComboBox cria para mostrar o texto - o resultado era
-             letra clara em fundo claro, ilegivel na caixa e na lista aberta.
+        <!-- ComboBox com template proprio.
 
-             Estilo de TextBlock ganha de cor herdada, entao mandar so o
-             Foreground do ComboBox nao resolve: e preciso trocar o estilo de
-             TextBlock DENTRO do ComboBox. Cada ComboBox faz isso com
+             As duas tentativas anteriores mexeram na cor da letra e deixaram o
+             desenho padrao do Windows no lugar. Nao resolveu: o template padrao
+             traz o proprio fundo CLARO, e a cor da letra que a gente controla
+             nao alcanca todas as partes dele - sobrava letra clara em fundo
+             claro em algum canto (a caixa fechada, a lista, ou o item sob o
+             mouse, dependendo do tema do Windows).
 
-                 <ComboBox.Resources>
-                     <Style TargetType="TextBlock" BasedOn="{StaticResource TextoEmCombo}" />
-                 </ComboBox.Resources>
-
-             e o popup da lista, que faz parte da arvore dele, pega a mesma
-             regra. Nao da para embutir isso num Setter aqui: Resources e
-             propriedade CLR comum, nao DependencyProperty, e Setter so aceita
-             DependencyProperty. -->
-        <SolidColorBrush x:Key="TextoCombo" Color="#12141A" />
+             Com template proprio nao ha fundo herdado de ninguem: cada parte -
+             caixa, seta, popup, item normal, item sob o mouse, item selecionado
+             - tem cor explicita, do mesmo tema escuro do resto do programa.
+             Deixa de depender de qual tema o Windows esta usando. -->
+        <SolidColorBrush x:Key="TextoCombo" Color="#E4E7EF" />
 
         <Style x:Key="TextoEmCombo" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextoCombo}" />
             <Setter Property="FontFamily" Value="Segoe UI" />
         </Style>
 
-        <Style TargetType="ComboBox">
-            <Setter Property="Foreground" Value="{StaticResource TextoCombo}" />
-            <Setter Property="Padding"    Value="6,4" />
-        </Style>
-
         <Style TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="{StaticResource TextoCombo}" />
+            <Setter Property="Padding"    Value="8,5" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="fundo" Background="Transparent"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <!-- Todos os estados com fundo ESCURO, e a letra
+                                 clara sempre. Um destaque dourado exigiria
+                                 trocar a letra para escura junto, e a letra do
+                                 item vem de um estilo de TextBlock, que ganha de
+                                 cor herdada - o par se separaria e voltaria o
+                                 claro-no-claro. Estado escuro nao tem esse
+                                 risco: a mesma letra serve para todos. -->
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="fundo" Property="Background" Value="#2A3346" />
+                            </Trigger>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="fundo" Property="Background" Value="#39456180" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground"      Value="{StaticResource TextoCombo}" />
+            <Setter Property="Background"      Value="{StaticResource BgConsole}" />
+            <Setter Property="BorderBrush"     Value="{StaticResource Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding"         Value="7,5" />
+            <Setter Property="Cursor"          Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment"   Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <!-- ToggleButton ocupando a caixa toda: e o que
+                                 abre e fecha a lista. Sem ele o clique nao
+                                 faz nada. -->
+                            <ToggleButton x:Name="parteClicavel"
+                                          Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay,
+                                                      RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="caixa"
+                                                Background="{StaticResource BgConsole}"
+                                                BorderBrush="{StaticResource Border}"
+                                                BorderThickness="1" CornerRadius="3">
+                                            <Path x:Name="seta" HorizontalAlignment="Right"
+                                                  VerticalAlignment="Center" Margin="0,0,9,0"
+                                                  Data="M 0 0 L 4 4 L 8 0 Z"
+                                                  Fill="{StaticResource TextDim}" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="caixa" Property="BorderBrush"
+                                                        Value="{StaticResource Accent}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <!-- O texto do item escolhido. IsHitTestVisible
+                                 False para o clique atravessar e chegar no
+                                 ToggleButton de tras. -->
+                            <ContentPresenter x:Name="textoEscolhido"
+                                              Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Left" VerticalAlignment="Center"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+
+                            <Popup x:Name="Popup" AllowsTransparency="True" Focusable="False"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   PopupAnimation="Slide">
+                                <Border MinWidth="{TemplateBinding ActualWidth}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Background="{StaticResource BgPanel}"
+                                        BorderBrush="{StaticResource Border}"
+                                        BorderThickness="1" CornerRadius="3" Margin="0,2,0,0">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Sub-abas de Extras: em cima, horizontais. Estilo proprio pelo mesmo
+             motivo do ComboBox - o desenho padrao do Windows traz fundo claro,
+             e num tema escuro isso aparece como retangulo branco. -->
+        <Style x:Key="SubAba" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="raiz" Background="Transparent" Padding="16,9" Margin="0,0,4,0"
+                                BorderThickness="0,0,0,2" BorderBrush="Transparent" CornerRadius="3,3,0,0">
+                            <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="raiz" Property="Background" Value="#1A1D26" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="raiz" Property="Background" Value="#1A1D26" />
+                                <Setter TargetName="raiz" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                <Setter Property="Foreground" Value="{StaticResource Text}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
     </Application.Resources>
